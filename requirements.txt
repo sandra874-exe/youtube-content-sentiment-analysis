@@ -10,3 +10,5 @@ streamlit
 emoji
 wordcloud
 openpyxl
+seaborn
+ipykernel
