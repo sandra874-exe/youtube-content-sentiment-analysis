@@ -5,10 +5,10 @@ google-api-python-client
 vaderSentiment
 scikit-learn
 nltk
-transformers
-torch
 plotly
 streamlit
 emoji
 wordcloud
 openpyxl
+seaborn
+ipykernel
