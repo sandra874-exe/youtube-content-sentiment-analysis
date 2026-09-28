@@ -1,14 +1,21 @@
-pandas
-numpy
-python-dotenv
-google-api-python-client
-vaderSentiment
-scikit-learn
-nltk
-transformers
-torch
-plotly
-streamlit
-emoji
-wordcloud
-openpyxl
+# Virtual environment
+venv/
+.venv/
+
+# Environment / secrets
+.env
+.env.*
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ZIP/archive files
+*.zip
