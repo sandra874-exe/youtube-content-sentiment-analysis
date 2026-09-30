@@ -1,0 +1,17 @@
+pandas
+numpy
+python-dotenv
+google-api-python-client
+requests
+vaderSentiment
+scikit-learn
+nltk
+transformers
+torch
+torchvision
+plotly
+streamlit
+emoji
+wordcloud
+openpyxl
+joblib

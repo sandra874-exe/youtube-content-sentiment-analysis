@@ -1,0 +1,13 @@
+# Local environment
+.venv/
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Saved models / runtime outputs
+models/saved/*.joblib
+outputs/
+
+# Generated data (keep selected CSVs explicitly)
