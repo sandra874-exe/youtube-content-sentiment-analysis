@@ -1,183 +1,259 @@
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
+from pathlib import Path
 
-from transformers import pipeline
+import matplotlib.pyplot as plt
+import pandas as pd
+import torch
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
-    ConfusionMatrixDisplay
+    ConfusionMatrixDisplay,
 )
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-INPUT_FILE = "data/processed/vader_validation_results.csv"
-OUTPUT_FILE = "data/processed/transformer_validation_results.csv"
-CONFUSION_MATRIX_FILE = "data/processed/transformer_confusion_matrix.png"
+
+INPUT_FILE = Path("data/processed/vader_validation_sample.csv")
+OUTPUT_FILE = Path("data/processed/transformer_validation_results.csv")
+CONFUSION_MATRIX_FILE = Path(
+    "data/processed/transformer_confusion_matrix.png"
+)
 
 MODEL_NAME = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
-print("Loading validation data...")
+LABELS = ["positive", "neutral", "negative"]
 
-df = pd.read_csv(INPUT_FILE)
 
-print("Dataset shape:", df.shape)
-print("Columns:", list(df.columns))
+def main():
+    print("Loading human-labelled validation data...")
 
-text_column = "clean_text"
-human_column = "human-sentiment"
+    df = pd.read_csv(INPUT_FILE)
 
-# Remove missing values
-df = df.dropna(subset=[text_column, human_column]).copy()
+    required_columns = {
+        "comment_id",
+        "clean_text",
+        "human_sentiment",
+    }
 
-# Keep only valid human labels
-valid_labels = ["positive", "neutral", "negative"]
-df = df[df[human_column].isin(valid_labels)].copy()
+    missing = required_columns - set(df.columns)
 
-print("Comments used for evaluation:", len(df))
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {sorted(missing)}"
+        )
 
-print("\nLoading Transformer model...")
-print("Model:", MODEL_NAME)
+    if df["comment_id"].duplicated().any():
+        raise ValueError("Duplicate comment_id values found.")
 
-classifier = pipeline(
-    "sentiment-analysis",
-    model=MODEL_NAME,
-    tokenizer=MODEL_NAME,
-    truncation=True,
-    max_length=512
-)
+    invalid_labels = set(df["human_sentiment"].dropna()) - set(LABELS)
 
-print("\nRunning Transformer sentiment analysis...")
+    if invalid_labels:
+        raise ValueError(
+            f"Invalid human sentiment labels: {sorted(invalid_labels)}"
+        )
 
-results = []
+    print(f"Validation comments: {len(df)}")
+    print("\nHuman label distribution:")
+    print(df["human_sentiment"].value_counts())
 
-texts = df[text_column].astype(str).tolist()
+    print(f"\nLoading model: {MODEL_NAME}")
 
-# Process in batches
-for start in range(0, len(texts), 16):
-    batch = texts[start:start + 16]
-
-    predictions = classifier(
-        batch,
-        batch_size=16
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        MODEL_NAME
     )
 
-    results.extend(predictions)
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
 
+    model.to(device)
+    model.eval()
+
+    print(f"Using device: {device}")
+
+    texts = df["clean_text"].fillna("").astype(str).tolist()
+
+    predictions = []
+    prediction_scores = []
+    negative_scores = []
+    neutral_scores = []
+    positive_scores = []
+
+    batch_size = 16
+
+    for start in range(0, len(texts), batch_size):
+        batch_texts = texts[start:start + batch_size]
+
+        encoded = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            max_length=256,
+            return_tensors="pt",
+        )
+
+        encoded = {
+            key: value.to(device)
+            for key, value in encoded.items()
+        }
+
+        with torch.no_grad():
+            outputs = model(**encoded)
+
+        probabilities = torch.softmax(
+            outputs.logits,
+            dim=-1,
+        )
+
+        predicted_ids = probabilities.argmax(dim=-1)
+
+        for probs, predicted_id in zip(
+            probabilities,
+            predicted_ids,
+        ):
+            predicted_id = int(predicted_id.item())
+
+            raw_label = model.config.id2label[predicted_id]
+            label = raw_label.lower()
+
+            predictions.append(label)
+            prediction_scores.append(
+                float(probs[predicted_id].item())
+            )
+
+            negative_scores.append(
+                float(probs[0].item())
+            )
+            neutral_scores.append(
+                float(probs[1].item())
+            )
+            positive_scores.append(
+                float(probs[2].item())
+            )
+
+        print(
+            f"Processed {min(start + batch_size, len(texts))}"
+            f"/{len(texts)}"
+        )
+
+    df["transformer_neg"] = negative_scores
+    df["transformer_neu"] = neutral_scores
+    df["transformer_pos"] = positive_scores
+    df["transformer_score"] = prediction_scores
+    df["transformer_sentiment"] = predictions
+
+    output_columns = [
+        "comment_id",
+        "domain",
+        "creator",
+        "video_id",
+        "video_title",
+        "clean_text",
+        "human_sentiment",
+        "transformer_neg",
+        "transformer_neu",
+        "transformer_pos",
+        "transformer_score",
+        "transformer_sentiment",
+    ]
+
+    df[output_columns].to_csv(
+        OUTPUT_FILE,
+        index=False,
+    )
+
+    y_true = df["human_sentiment"]
+    y_pred = df["transformer_sentiment"]
+
+    accuracy = accuracy_score(y_true, y_pred)
+
+    print("\n==============================")
+    print("TRANSFORMER VALIDATION")
+    print("==============================")
+
+    print(f"\nAccuracy: {accuracy:.4f}")
+
+    print("\nClassification Report:")
     print(
-        f"Processed {min(start + 16, len(texts))}/{len(texts)} comments"
+        classification_report(
+            y_true,
+            y_pred,
+            labels=LABELS,
+            zero_division=0,
+        )
     )
 
-# Convert model labels to standard labels
-def normalize_label(label):
-    label = str(label).lower()
+    print("\nConfusion Matrix:")
+    print(
+        confusion_matrix(
+            y_true,
+            y_pred,
+            labels=LABELS,
+        )
+    )
 
-    if "negative" in label:
-        return "negative"
-
-    if "neutral" in label:
-        return "neutral"
-
-    if "positive" in label:
-        return "positive"
-
-    if label in ["label_0", "0"]:
-        return "negative"
-
-    if label in ["label_1", "1"]:
-        return "neutral"
-
-    if label in ["label_2", "2"]:
-        return "positive"
-
-    return label
-
-
-df["transformer_sentiment"] = [
-    normalize_label(result["label"])
-    for result in results
-]
-
-df["transformer_score"] = [
-    result["score"]
-    for result in results
-]
-
-# Save predictions
-df.to_csv(OUTPUT_FILE, index=False)
-
-print("\nTransformer predictions saved to:")
-print(OUTPUT_FILE)
-
-# Evaluation
-y_true = df[human_column]
-y_pred = df["transformer_sentiment"]
-
-accuracy = accuracy_score(y_true, y_pred)
-
-print("\n==============================")
-print("TRANSFORMER EVALUATION")
-print("==============================")
-
-print(f"\nAccuracy: {accuracy:.4f}")
-
-print("\nClassification Report:")
-print(
-    classification_report(
+    report = classification_report(
         y_true,
         y_pred,
-        labels=valid_labels,
-        zero_division=0
+        labels=LABELS,
+        output_dict=True,
+        zero_division=0,
     )
-)
 
-# Confusion matrix
-cm = confusion_matrix(
-    y_true,
-    y_pred,
-    labels=valid_labels
-)
+    print(
+        f"Macro Precision: "
+        f"{report['macro avg']['precision']:.4f}"
+    )
+    print(
+        f"Macro Recall: "
+        f"{report['macro avg']['recall']:.4f}"
+    )
+    print(
+        f"Macro F1: "
+        f"{report['macro avg']['f1-score']:.4f}"
+    )
 
-print("\nConfusion Matrix:")
-print(cm)
+    cm = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=LABELS,
+    )
 
-disp = ConfusionMatrixDisplay(
-    confusion_matrix=cm,
-    display_labels=valid_labels
-)
+    fig, ax = plt.subplots(figsize=(7, 6))
 
-disp.plot()
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm,
+        display_labels=LABELS,
+    )
 
-plt.title("Transformer Sentiment Confusion Matrix")
-plt.tight_layout()
+    disp.plot(
+        ax=ax,
+        values_format="d",
+        colorbar=False,
+    )
 
-plt.savefig(
-    CONFUSION_MATRIX_FILE,
-    dpi=300,
-    bbox_inches="tight"
-)
+    ax.set_title(
+        "Transformer Sentiment Confusion Matrix"
+    )
 
-plt.close()
+    plt.tight_layout()
 
-print("\nConfusion matrix saved to:")
-print(CONFUSION_MATRIX_FILE)
+    plt.savefig(
+        CONFUSION_MATRIX_FILE,
+        dpi=300,
+        bbox_inches="tight",
+    )
 
-# Prediction counts
-print("\nTransformer sentiment counts:")
-print(df["transformer_sentiment"].value_counts())
+    plt.close(fig)
 
-print("\nHuman sentiment counts:")
-print(df[human_column].value_counts())
+    print(
+        f"\nSaved validation results to: {OUTPUT_FILE}"
+    )
+    print(
+        f"Saved confusion matrix to: "
+        f"{CONFUSION_MATRIX_FILE}"
+    )
 
-print("\nFirst 10 predictions:")
-print(
-    df[
-        [
-            "clean_text",
-            "human-sentiment",
-            "transformer_sentiment",
-            "transformer_score"
-        ]
-    ].head(10).to_string(index=False)
-)
 
-print("\nTransformer analysis completed successfully.")
+if __name__ == "__main__":
+    main()
