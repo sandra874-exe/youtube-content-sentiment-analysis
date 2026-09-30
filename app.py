@@ -3506,14 +3506,7 @@ if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze
             unsafe_allow_html=True,
         )
 
-        if sentiment=="positive":
-            context="The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
-        elif sentiment=="negative":
-            context="The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
-        else:
-            context="The language is relatively neutral, with limited positive or negative emotional intensity."
-        st.markdown(f'<div class="insight-card"><span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span><strong>Context</strong><br>{context}</div>',unsafe_allow_html=True)
-
+st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-kicker">About the project</div>', unsafe_allow_html=True)
