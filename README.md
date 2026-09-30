@@ -1,45 +1,46 @@
-# YouTube Content Sentiment Analysis
+# YouTube Pulse: YouTube Content Sentiment Analysis
 
-## Overview
+YouTube Pulse analyzes YouTube comments to understand **audience sentiment, engagement, vocabulary, and content patterns** across different creator communities.
 
-A data science project analyzing sentiment and engagement in YouTube comments across three content domains:
-
-- **Technology** — Mrwhosetheboss
-- **Travel** — Ryan Trahan
-- **Cats** — Abram Engle
-
-The project uses **750 comments from 15 videos** and combines data preprocessing, exploratory analysis, VADER sentiment analysis, transformer-based sentiment analysis, model validation, and an interactive Streamlit dashboard.
+The project combines a controlled research dataset with an interactive **Streamlit dashboard** for live YouTube URL analysis.
 
 ## Dataset
 
-| Domain | Videos | Comments |
-|---|---:|---:|
-| Technology | 5 | 250 |
-| Travel | 5 | 250 |
-| Cats | 5 | 250 |
-| **Total** | **15** | **750** |
+The research dataset contains **750 top-level comments from 15 videos** across three content domains:
 
-## Workflow
+| Domain | Creator | Videos | Comments |
+|---|---|---:|---:|
+| Technology | Mrwhosetheboss | 5 | 250 |
+| Travel | Ryan Trahan | 5 | 250 |
+| Cats | Abram Engle | 5 | 250 |
+| **Total** | **3 creators** | **15** | **750** |
 
-```text
-YouTube Data API
-       ↓
-Data Collection
-       ↓
-Data Cleaning
-       ↓
-EDA
-       ↓
-Sentiment Analysis
-       ↓
-Human Validation
-       ↓
-Model Comparison
-       ↓
-Error Analysis
-       ↓
-Streamlit Dashboard
-```
+A separate **120-comment human-annotated validation set** was used to evaluate the sentiment models.
+
+
+## Project Highlights
+
+- Analyzed **750 YouTube comments** across 15 videos and 3 content domains.
+- Compared **VADER and Twitter-RoBERTa** for sentiment classification.
+- Used a **120-comment manually labeled dataset** for model validation.
+- Performed exploratory analysis of **sentiment, engagement, comment length, and vocabulary**.
+- Developed an interactive **Streamlit dashboard** for YouTube content analysis.
+
+## Features
+
+- YouTube video comment analysis
+- Sentiment classification
+- VADER and Twitter-RoBERTa comparison
+- Creator and video comparison
+- Comment engagement analysis
+- Vocabulary analysis using TF-IDF
+- Interactive visualizations using Plotly
+- Streamlit-based dashboard
+
+
+## System Architecture
+
+![YouTube Pulse System Architecture](assets/workflow.png)
 
 ## Sentiment Analysis
 
