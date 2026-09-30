@@ -1,4 +1,4 @@
-i,domain,creator,video_id,video_title,clean_text,human,vader,transformer,vader_correct,transformer_correct,error_category
+comment_id,domain,creator,video_id,video_title,clean_text,human_sentiment,vader_sentiment,transformer_sentiment,vader_correct,transformer_correct,error_category
 UgzgSbVH1_0PqwL9A7V4AaABAg,cats,Abram Engle,_fC1khz15OA,my cats tried whatever my subscribers suggested,"12:39 ❤❤. Can't really judge on the 1st time you introduce new ways to play with Kurt & Gary. After all, they are cats. And being cats, anything new, is met with a little suspiciousness, some curiosity, & alot of ""cat attitude"".❤❤❤😊",positive,positive,positive,True,True,Both Correct
 UgxgVDD2dJVR-p8g1kt4AaABAg,cats,Abram Engle,hVhi6uL-l00,I don't know what I was thinking,Kurt is loafing there like a ginger bread😂 The cats in the shelter will love it ❤,positive,positive,positive,True,True,Both Correct
 UgwsgA1MNfpWQ0ag9LN4AaABAg,cats,Abram Engle,SrqMV7uSg1c,Minute to Win it - Cat Edition,What a great video - I'm still laughing!😂,positive,positive,positive,True,True,Both Correct

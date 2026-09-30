@@ -1,146 +1,183 @@
+from pathlib import Path
+
 import pandas as pd
 
-INPUT_FILE = "data/processed/transformer_validation_results.csv"
-OUTPUT_FILE = "data/processed/error_analysis.csv"
 
-print("Loading validation results...")
+VADER_FILE = Path(
+    "data/processed/vader_validation_results.csv"
+)
 
-df = pd.read_csv(INPUT_FILE)
+TRANSFORMER_FILE = Path(
+    "data/processed/transformer_validation_results.csv"
+)
 
-print("Dataset shape:", df.shape)
+OUTPUT_FILE = Path(
+    "data/processed/error_analysis.csv"
+)
 
-# Ground truth
-df["human"] = df["human-sentiment"]
 
-# Predictions
-df["vader"] = df["vader_sentiment"]
-df["transformer"] = df["transformer_sentiment"]
+def main():
+    print("Loading validation results...")
 
-# Determine correctness
-df["vader_correct"] = df["vader"] == df["human"]
-df["transformer_correct"] = df["transformer"] == df["human"]
+    vader = pd.read_csv(VADER_FILE)
+    transformer = pd.read_csv(TRANSFORMER_FILE)
 
-# Categorize each comment
-def classify(row):
+    required_vader = {
+        "comment_id",
+        "human_sentiment",
+        "clean_text",
+        "vader_sentiment",
+    }
 
-    if row["vader_correct"] and row["transformer_correct"]:
-        return "Both Correct"
+    required_transformer = {
+        "comment_id",
+        "transformer_sentiment",
+    }
 
-    elif row["vader_correct"] and not row["transformer_correct"]:
-        return "VADER Correct / Transformer Wrong"
+    missing_vader = required_vader - set(vader.columns)
+    missing_transformer = required_transformer - set(
+        transformer.columns
+    )
 
-    elif not row["vader_correct"] and row["transformer_correct"]:
-        return "VADER Wrong / Transformer Correct"
+    if missing_vader:
+        raise ValueError(
+            f"VADER file is missing: {sorted(missing_vader)}"
+        )
 
-    else:
+    if missing_transformer:
+        raise ValueError(
+            "Transformer file is missing: "
+            f"{sorted(missing_transformer)}"
+        )
+
+    if vader["comment_id"].duplicated().any():
+        raise ValueError(
+            "Duplicate comment_id values found in VADER results."
+        )
+
+    if transformer["comment_id"].duplicated().any():
+        raise ValueError(
+            "Duplicate comment_id values found in "
+            "Transformer results."
+        )
+
+    comparison = vader[
+        [
+            "comment_id",
+            "domain",
+            "creator",
+            "video_id",
+            "video_title",
+            "clean_text",
+            "human_sentiment",
+            "vader_sentiment",
+        ]
+    ].merge(
+        transformer[
+            [
+                "comment_id",
+                "transformer_sentiment",
+            ]
+        ],
+        on="comment_id",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    print(
+        f"Matched comments: {len(comparison)}"
+    )
+
+    if len(comparison) != len(vader) or len(comparison) != len(
+        transformer
+    ):
+        raise ValueError(
+            "The VADER and Transformer files do not contain "
+            "the same set of comment IDs."
+        )
+
+    comparison["vader_correct"] = (
+        comparison["vader_sentiment"]
+        == comparison["human_sentiment"]
+    )
+
+    comparison["transformer_correct"] = (
+        comparison["transformer_sentiment"]
+        == comparison["human_sentiment"]
+    )
+
+    def classify_error(row):
+        if row["vader_correct"] and row["transformer_correct"]:
+            return "Both Correct"
+
+        if row["vader_correct"] and not row["transformer_correct"]:
+            return "VADER Correct / Transformer Wrong"
+
+        if not row["vader_correct"] and row["transformer_correct"]:
+            return "VADER Wrong / Transformer Correct"
+
         return "Both Wrong"
 
+    comparison["error_category"] = comparison.apply(
+        classify_error,
+        axis=1,
+    )
 
-df["error_category"] = df.apply(classify, axis=1)
+    output_columns = [
+        "comment_id",
+        "domain",
+        "creator",
+        "video_id",
+        "video_title",
+        "clean_text",
+        "human_sentiment",
+        "vader_sentiment",
+        "transformer_sentiment",
+        "vader_correct",
+        "transformer_correct",
+        "error_category",
+    ]
 
-# Save complete analysis
-columns = [
-    "i",
-    "domain",
-    "creator",
-    "video_id",
-    "video_title",
-    "clean_text",
-    "human",
-    "vader",
-    "transformer",
-    "vader_correct",
-    "transformer_correct",
-    "error_category"
-]
+    comparison[output_columns].to_csv(
+        OUTPUT_FILE,
+        index=False,
+    )
 
-df[columns].to_csv(
-    OUTPUT_FILE,
-    index=False
-)
+    print("\n==============================")
+    print("ERROR ANALYSIS")
+    print("==============================")
 
-print("\n==============================")
-print("ERROR ANALYSIS")
-print("==============================")
+    print("\nError category counts:")
+    print(
+        comparison["error_category"]
+        .value_counts()
+        .to_string()
+    )
 
-print("\nCategory counts:")
+    print("\nError category percentages:")
+    print(
+        (
+            comparison["error_category"]
+            .value_counts(normalize=True)
+            .mul(100)
+            .round(2)
+            .astype(str)
+            + "%"
+        ).to_string()
+    )
 
-counts = df["error_category"].value_counts()
+    print("\nErrors by domain:")
+    domain_summary = pd.crosstab(
+        comparison["domain"],
+        comparison["error_category"],
+    )
 
-print(counts)
+    print(domain_summary.to_string())
 
-print("\nCategory percentages:")
+    print(
+        f"\nSaved error analysis to: {OUTPUT_FILE}"
+    )
 
-percentages = (
-    df["error_category"]
-    .value_counts(normalize=True)
-    .mul(100)
-    .round(2)
-)
 
-print(percentages)
-
-print("\n==============================")
-print("VADER CORRECT / TRANSFORMER WRONG")
-print("==============================")
-
-vader_only = df[
-    (df["vader_correct"] == True) &
-    (df["transformer_correct"] == False)
-]
-
-print(
-    vader_only[
-        [
-            "clean_text",
-            "human",
-            "vader",
-            "transformer"
-        ]
-    ].to_string(index=False)
-)
-
-print("\n==============================")
-print("VADER WRONG / TRANSFORMER CORRECT")
-print("==============================")
-
-transformer_only = df[
-    (df["vader_correct"] == False) &
-    (df["transformer_correct"] == True)
-]
-
-print(
-    transformer_only[
-        [
-            "clean_text",
-            "human",
-            "vader",
-            "transformer"
-        ]
-    ].to_string(index=False)
-)
-
-print("\n==============================")
-print("BOTH WRONG")
-print("==============================")
-
-both_wrong = df[
-    (df["vader_correct"] == False) &
-    (df["transformer_correct"] == False)
-]
-
-print(
-    both_wrong[
-        [
-            "clean_text",
-            "human",
-            "vader",
-            "transformer"
-        ]
-    ].to_string(index=False)
-)
-
-print("\nError analysis saved to:")
-print(OUTPUT_FILE)
-
-print("\nError analysis completed successfully.")
+if __name__ == "__main__":
+    main()

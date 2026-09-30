@@ -23,6 +23,8 @@ from src.sentiment_analyzer import (
     get_vader_sentiment,
 )
 
+from src.creator_comparison import compare_creators
+
 from src.sarcasm_analyzer import (
     load_sarcasm_detector,
     detect_sarcasm,
@@ -397,14 +399,8 @@ if "content_type" not in st.session_state:
 if "channel_videos" not in st.session_state:
     st.session_state.channel_videos = []
 
-if "comparison_results" not in st.session_state:
-    st.session_state.comparison_results = []
-
-if "comparison_type" not in st.session_state:
-    st.session_state.comparison_type = None
-
-if "analysis_errors" not in st.session_state:
-    st.session_state.analysis_errors = []
+if "comparison_result" not in st.session_state:
+    st.session_state.comparison_result = None
 
 
 # ============================================================
@@ -524,7 +520,7 @@ def sentiment_donut(summary, title="Audience Mood"):
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -557,7 +553,7 @@ def sentiment_bar(summary):
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -802,7 +798,6 @@ def analyze_youtube_url(
         videos,
     )
 
-
 # ============================================================
 # MULTI-URL ANALYSIS / COMPARISON
 # ============================================================
@@ -988,6 +983,404 @@ def show_comparison_results(results, comparison_type):
             show_comments(result, key_suffix=f"_comparison_{idx}")
             show_models(result)
 
+
+
+# ============================================================
+# CREATOR COMPARISON
+# ============================================================
+
+def comparison_sentiment_chart(metrics):
+    if metrics.empty:
+        return
+
+    plot_df = metrics[
+        ["creator", "positive_pct", "neutral_pct", "negative_pct"]
+    ].melt(
+        id_vars="creator",
+        var_name="sentiment",
+        value_name="percentage",
+    )
+
+    plot_df["sentiment"] = plot_df["sentiment"].str.replace(
+        "_pct", "", regex=False
+    )
+
+    fig = px.bar(
+        plot_df,
+        x="creator",
+        y="percentage",
+        color="sentiment",
+        barmode="group",
+        text="percentage",
+        color_discrete_map=SENTIMENT_COLORS,
+        category_orders={
+            "sentiment": ["positive", "neutral", "negative"]
+        },
+        title="Sentiment composition by creator",
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+    )
+    fig.update_layout(
+        yaxis_title="Comments (%)",
+        xaxis_title="",
+        height=470,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def comparison_engagement_chart(metrics, metric):
+    if metrics.empty:
+        return
+
+    fig = px.bar(
+        metrics,
+        x="creator",
+        y=metric,
+        text=metric,
+        title=metric.replace("_", " ").title(),
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.1f}",
+        textposition="outside",
+    )
+    fig.update_layout(
+        xaxis_title="",
+        yaxis_title="",
+        height=430,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def show_creator_comparison(result):
+    metrics = result["metrics"]
+    video_sentiment = result["video_sentiment"]
+    keywords = result["keywords"]
+
+    st.markdown(
+        '<div class="section-divider"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-kicker">Creator benchmark</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-title">How the audiences compare</div>',
+        unsafe_allow_html=True,
+    )
+
+    if metrics.empty:
+        st.info("No comparison results are available.")
+        return
+
+    st.dataframe(
+        metrics[
+            [
+                "creator",
+                "comments_analyzed",
+                "videos_analyzed",
+                "positive_pct",
+                "neutral_pct",
+                "negative_pct",
+                "average_comment_likes",
+                "median_comment_likes",
+                "model_agreement_pct",
+            ]
+        ].rename(
+            columns={
+                "creator": "Creator",
+                "comments_analyzed": "Comments",
+                "videos_analyzed": "Videos",
+                "positive_pct": "Positive %",
+                "neutral_pct": "Neutral %",
+                "negative_pct": "Negative %",
+                "average_comment_likes": "Avg. Comment Likes",
+                "median_comment_likes": "Median Comment Likes",
+                "model_agreement_pct": "Model Agreement %",
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    left, right = st.columns(2)
+
+    with left:
+        comparison_sentiment_chart(metrics)
+
+    with right:
+        metric = st.selectbox(
+            "Engagement metric",
+            [
+                "average_comment_likes",
+                "median_comment_likes",
+                "average_video_views",
+                "average_video_likes",
+            ],
+            format_func=lambda value: value.replace("_", " ").title(),
+            key="comparison_engagement_metric",
+        )
+        comparison_engagement_chart(metrics, metric)
+
+    st.markdown(
+        '<div class="section-title">📹 Video-level sentiment</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not video_sentiment.empty:
+        video_display = video_sentiment[
+            [
+                "creator",
+                "video_title",
+                "positive_pct",
+                "neutral_pct",
+                "negative_pct",
+                "total",
+            ]
+        ].rename(
+            columns={
+                "creator": "Creator",
+                "video_title": "Video",
+                "positive_pct": "Positive %",
+                "neutral_pct": "Neutral %",
+                "negative_pct": "Negative %",
+                "total": "Comments",
+            }
+        )
+
+        st.dataframe(
+            video_display,
+            width="stretch",
+            hide_index=True,
+            height=420,
+        )
+
+    st.markdown(
+        '<div class="section-title">🔑 Distinctive audience vocabulary</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not keywords.empty:
+        keyword_display = keywords.pivot(
+            index="rank",
+            columns="creator",
+            values="keyword",
+        ).reset_index(drop=True)
+
+        st.dataframe(
+            keyword_display,
+            width="stretch",
+            hide_index=False,
+        )
+
+    st.caption(
+        "Comparison results are descriptive. Each creator is sampled with the same number "
+        "of videos and comments per video, so raw counts should be interpreted alongside "
+        "percentages and engagement statistics."
+    )
+
+
+# ============================================================
+# CREATOR COMPARISON
+# ============================================================
+
+def comparison_sentiment_chart(metrics):
+    if metrics.empty:
+        return
+
+    plot_df = metrics[
+        ["creator", "positive_pct", "neutral_pct", "negative_pct"]
+    ].melt(
+        id_vars="creator",
+        var_name="sentiment",
+        value_name="percentage",
+    )
+
+    plot_df["sentiment"] = plot_df["sentiment"].str.replace(
+        "_pct", "", regex=False
+    )
+
+    fig = px.bar(
+        plot_df,
+        x="creator",
+        y="percentage",
+        color="sentiment",
+        barmode="group",
+        text="percentage",
+        color_discrete_map=SENTIMENT_COLORS,
+        category_orders={
+            "sentiment": ["positive", "neutral", "negative"]
+        },
+        title="Sentiment composition by creator",
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+    )
+    fig.update_layout(
+        yaxis_title="Comments (%)",
+        xaxis_title="",
+        height=470,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def comparison_engagement_chart(metrics, metric):
+    if metrics.empty:
+        return
+
+    fig = px.bar(
+        metrics,
+        x="creator",
+        y=metric,
+        text=metric,
+        title=metric.replace("_", " ").title(),
+    )
+
+    fig.update_traces(
+        texttemplate="%{text:.1f}",
+        textposition="outside",
+    )
+    fig.update_layout(
+        xaxis_title="",
+        yaxis_title="",
+        height=430,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def show_creator_comparison(result):
+    metrics = result["metrics"]
+    video_sentiment = result["video_sentiment"]
+    keywords = result["keywords"]
+
+    st.markdown(
+        '<div class="section-divider"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-kicker">Creator benchmark</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-title">How the audiences compare</div>',
+        unsafe_allow_html=True,
+    )
+
+    if metrics.empty:
+        st.info("No comparison results are available.")
+        return
+
+    st.dataframe(
+        metrics[
+            [
+                "creator",
+                "comments_analyzed",
+                "videos_analyzed",
+                "positive_pct",
+                "neutral_pct",
+                "negative_pct",
+                "average_comment_likes",
+                "median_comment_likes",
+                "model_agreement_pct",
+            ]
+        ].rename(
+            columns={
+                "creator": "Creator",
+                "comments_analyzed": "Comments",
+                "videos_analyzed": "Videos",
+                "positive_pct": "Positive %",
+                "neutral_pct": "Neutral %",
+                "negative_pct": "Negative %",
+                "average_comment_likes": "Avg. Comment Likes",
+                "median_comment_likes": "Median Comment Likes",
+                "model_agreement_pct": "Model Agreement %",
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    left, right = st.columns(2)
+
+    with left:
+        comparison_sentiment_chart(metrics)
+
+    with right:
+        metric = st.selectbox(
+            "Engagement metric",
+            [
+                "average_comment_likes",
+                "median_comment_likes",
+                "average_video_views",
+                "average_video_likes",
+            ],
+            format_func=lambda value: value.replace("_", " ").title(),
+            key="comparison_engagement_metric",
+        )
+        comparison_engagement_chart(metrics, metric)
+
+    st.markdown(
+        '<div class="section-title">📹 Video-level sentiment</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not video_sentiment.empty:
+        video_display = video_sentiment[
+            [
+                "creator",
+                "video_title",
+                "positive_pct",
+                "neutral_pct",
+                "negative_pct",
+                "total",
+            ]
+        ].rename(
+            columns={
+                "creator": "Creator",
+                "video_title": "Video",
+                "positive_pct": "Positive %",
+                "neutral_pct": "Neutral %",
+                "negative_pct": "Negative %",
+                "total": "Comments",
+            }
+        )
+
+        st.dataframe(
+            video_display,
+            width="stretch",
+            hide_index=True,
+            height=420,
+        )
+
+    st.markdown(
+        '<div class="section-title">🔑 Distinctive audience vocabulary</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not keywords.empty:
+        keyword_display = keywords.pivot(
+            index="rank",
+            columns="creator",
+            values="keyword",
+        ).reset_index(drop=True)
+
+        st.dataframe(
+            keyword_display,
+            width="stretch",
+            hide_index=False,
+        )
+
+    st.caption(
+        "Comparison results are descriptive. Each creator is sampled with the same number "
+        "of videos and comments per video, so raw counts should be interpreted alongside "
+        "percentages and engagement statistics."
+    )
 
 # ============================================================
 # ANALYSIS DISPLAY
@@ -1278,12 +1671,12 @@ def show_topics(result, key_suffix=""):
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.dataframe(
                 keywords,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -1318,12 +1711,12 @@ def show_topics(result, key_suffix=""):
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.dataframe(
                 tfidf,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -1435,15 +1828,15 @@ def show_engagement(result):
 
         fig = px.bar(
             engagement,
-            x="vader_sentiment",
+            x="sentiment",
             y="total_likes",
             text="total_likes",
             title="Total Likes by Sentiment",
             labels={
-                "vader_sentiment": "Sentiment",
+                "sentiment": "Sentiment",
                 "total_likes": "Total Likes"
             },
-            color="vader_sentiment",
+            color="sentiment",
             color_discrete_map={
                 "positive": "#22c55e",
                 "neutral": "#94a3b8",
@@ -1471,7 +1864,7 @@ def show_engagement(result):
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            width="stretch"
         )
 
     # --------------------------------------------------------
@@ -1482,15 +1875,15 @@ def show_engagement(result):
 
         fig = px.bar(
             engagement,
-            x="vader_sentiment",
+            x="sentiment",
             y="average_likes",
             text="average_likes",
             title="Average Likes per Comment",
             labels={
-                "vader_sentiment": "Sentiment",
+                "sentiment": "Sentiment",
                 "average_likes": "Average Likes"
             },
-            color="vader_sentiment",
+            color="sentiment",
             color_discrete_map={
                 "positive": "#22c55e",
                 "neutral": "#94a3b8",
@@ -1518,7 +1911,7 @@ def show_engagement(result):
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            width="stretch"
         )
 
     # --------------------------------------------------------
@@ -1527,15 +1920,15 @@ def show_engagement(result):
 
     fig = px.bar(
         engagement,
-        x="vader_sentiment",
+        x="sentiment",
         y="comments",
         text="comments",
         title="Comment Volume by Sentiment",
         labels={
-            "vader_sentiment": "Sentiment",
+            "sentiment": "Sentiment",
             "comments": "Number of Comments"
         },
-        color="vader_sentiment",
+        color="sentiment",
         color_discrete_map={
             "positive": "#22c55e",
             "neutral": "#94a3b8",
@@ -1556,7 +1949,7 @@ def show_engagement(result):
 
     st.plotly_chart(
         fig,
-        use_container_width=True
+        width="stretch"
     )
 
     # --------------------------------------------------------
@@ -1569,8 +1962,8 @@ def show_engagement(result):
 
     display_df = engagement.copy()
 
-    display_df["vader_sentiment"] = (
-        display_df["vader_sentiment"]
+    display_df["sentiment"] = (
+        display_df["sentiment"]
         .str.title()
     )
 
@@ -1593,7 +1986,7 @@ def show_engagement(result):
 
     st.dataframe(
         display_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1711,7 +2104,7 @@ def show_comments(result, key_suffix=""):
         filtered[
             display_columns
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         height=550,
     )
@@ -1824,7 +2217,7 @@ def show_models(result):
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        width="stretch",
     )
 
     st.subheader(
@@ -1840,7 +2233,7 @@ def show_models(result):
                 "transformer_score",
             ]
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         height=500,
     )
@@ -1980,7 +2373,7 @@ def show_channel_breakdown(
 
     st.plotly_chart(
         fig,
-        use_container_width=True,
+        width="stretch",
     )
 
     display = video_df.drop(
@@ -1989,7 +2382,7 @@ def show_channel_breakdown(
 
     st.dataframe(
         display,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -2051,7 +2444,7 @@ def show_sarcasm(result):
                 xaxis_title="VADER Sentiment",
                 height=400,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     with right:
         if not by_sentiment.empty:
@@ -2067,7 +2460,7 @@ def show_sarcasm(result):
                 xaxis_title="VADER Sentiment",
                 height=400,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
     if "sarcasm_label" in comments.columns:
         examples = sarcastic_comment_examples(comments, n=15)
@@ -2088,7 +2481,7 @@ def show_sarcasm(result):
             if "sarcasm_score" in table.columns:
                 table["sarcasm_score"] = (table["sarcasm_score"] * 100).round(1)
                 table = table.rename(columns={"sarcasm_score": "sarcasm_confidence_%"})
-            st.dataframe(table, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(table, width="stretch", hide_index=True, height=500)
 
 
 def show_analysis_results():
@@ -2439,12 +2832,12 @@ def show_demo_dashboard():
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.dataframe(
                 domain_summary,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -2493,12 +2886,12 @@ def show_demo_dashboard():
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.dataframe(
                 creator_summary,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -2551,12 +2944,12 @@ def show_demo_dashboard():
 
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
             )
 
             st.dataframe(
                 video_summary,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -2626,7 +3019,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
         with right:
@@ -2653,7 +3046,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
     # --------------------------------------------------------
@@ -2720,7 +3113,7 @@ def show_demo_dashboard():
 
         st.dataframe(
             filtered[columns],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=600,
         )
@@ -2762,7 +3155,7 @@ def show_demo_dashboard():
 
             st.dataframe(
                 model_comparison,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -2820,7 +3213,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
         # VADER confusion matrix
@@ -2871,7 +3264,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
         # Transformer confusion matrix
@@ -2923,7 +3316,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
     # --------------------------------------------------------
@@ -2973,7 +3366,7 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
                 fig = px.pie(
@@ -2986,12 +3379,12 @@ def show_demo_dashboard():
 
                 st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             st.dataframe(
                 error_data,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 height=600,
             )
@@ -3009,6 +3402,7 @@ st.markdown(
     <nav class="topnav">
         <a href="#overview">Overview</a>
         <a href="#analyze">Analyze</a>
+        <a href="#compare">Compare Creators</a>
         <a href="#results">Results</a>
         <a href="#demo">Demo Dataset</a>
         <a href="#comment-analyzer">Comment Analyzer</a>
@@ -3041,239 +3435,33 @@ if not demo.empty:
 st.markdown('<div id="analyze" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-kicker">Live YouTube analysis</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-title">Analyze & Compare YouTube Content</div>', unsafe_allow_html=True)
-st.write(
-    "Analyze one source or compare multiple creators/videos side-by-side using the same sentiment pipeline. "
-    "For comparisons, paste one YouTube URL per line."
-)
+st.markdown('<div class="section-title">Analyze any YouTube video or channel</div>', unsafe_allow_html=True)
+st.write("Paste a YouTube URL and discover audience sentiment, engagement, topics, keywords and model-based insights.")
 
-analysis_mode = st.radio(
-    "What do you want to analyze?",
-    ["Single source", "Compare creators", "Compare videos"],
-    horizontal=True,
-    key="analysis_mode",
-)
+url=st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=... or https://www.youtube.com/@channel", key="one_page_url")
+comment_limit=st.slider("Comments to analyze",100,5000,1000,100,help="Maximum number of comments collected for this analysis.",key="one_page_limit")
 
-if analysis_mode == "Single source":
-    url_input = st.text_area(
-        "YouTube URL",
-        placeholder="https://www.youtube.com/watch?v=...\nor\nhttps://www.youtube.com/@channel",
-        height=90,
-        key="one_page_url",
-    )
-    comment_limit = st.slider(
-        "Comments to analyze",
-        100,
-        5000,
-        1000,
-        100,
-        help="Maximum number of comments collected for this source.",
-        key="one_page_limit",
-    )
-    run_label = "✨ Analyze Now"
-else:
-    if analysis_mode == "Compare creators":
-        st.info("Enter 2–5 creator/channel URLs, one per line. Each creator is analysed independently and then compared.")
-        placeholder = "https://www.youtube.com/@creator_one\nhttps://www.youtube.com/@creator_two\nhttps://www.youtube.com/@creator_three"
+if st.button("✨ Analyze Now",type="primary",width="stretch",key="one_page_analyze"):
+    if not url.strip():
+        st.warning("Please enter a YouTube URL.")
     else:
-        st.info("Enter 2–5 video URLs, one per line. Each video is analysed independently and then compared.")
-        placeholder = "https://www.youtube.com/watch?v=VIDEO_ID_1\nhttps://www.youtube.com/watch?v=VIDEO_ID_2\nhttps://www.youtube.com/watch?v=VIDEO_ID_3"
-
-    url_input = st.text_area(
-        "YouTube URLs — one URL per line",
-        placeholder=placeholder,
-        height=150,
-        key="comparison_urls",
-    )
-    comment_limit = st.slider(
-        "Comments per source",
-        100,
-        5000,
-        1000,
-        100,
-        help="Each creator/video gets its own comment budget. Total API usage grows with the number of sources.",
-        key="comparison_limit",
-    )
-    run_label = "⚖️ Analyze & Compare"
-
-if st.button(run_label, type="primary", use_container_width=True, key="one_page_analyze"):
-    # Clear the previous report BEFORE starting a new run.
-    # Otherwise an incomplete comparison can leave an old report on screen.
-    st.session_state.analysis_result = None
-    st.session_state.content_info = None
-    st.session_state.content_type = None
-    st.session_state.channel_videos = []
-    st.session_state.comparison_results = []
-    st.session_state.comparison_type = None
-    st.session_state.analysis_errors = []
-
-    try:
-        if analysis_mode == "Single source":
-            urls = parse_youtube_urls(url_input, minimum=1, maximum=1)
-        else:
-            urls = parse_youtube_urls(url_input, minimum=2, maximum=5)
-
-        # Comparison mode is intentionally ALL-OR-NOTHING:
-        # if one creator/video fails, do not show a misleading 1-of-3 or 2-of-3 report.
-        with st.status(
-            f"🔄 Processing {len(urls)} source(s)...",
-            expanded=True,
-        ) as status:
-            transformer = get_transformer()
-            results = []
-            errors = []
-
-            for index, source_url in enumerate(urls):
-                st.write(
-                    f"**Source {index + 1}/{len(urls)}** — {source_url}"
-                )
-
-                try:
-                    detected = identify_youtube_url(source_url)
-                    if not detected:
-                        raise ValueError(
-                            "YouTube URL could not be identified."
-                        )
-
-                    detected_type = detected.get("type")
-
-                    if (
-                        analysis_mode == "Compare creators"
-                        and detected_type != "channel"
-                    ):
-                        raise ValueError(
-                            "This is not a channel URL. Use a channel URL "
-                            "such as /@handle or /channel/ID."
-                        )
-
-                    if (
-                        analysis_mode == "Compare videos"
-                        and detected_type != "video"
-                    ):
-                        raise ValueError(
-                            "This is not a video URL. Use a YouTube watch, "
-                            "shorts or youtu.be video URL."
-                        )
-
-                    st.write("🎬 Fetching metadata and comments...")
-
-                    result = analyze_source(
-                        source_url,
-                        comment_limit,
-                        transformer,
-                        st,
-                    )
-
-                    # Keep result order identical to input order.
-                    results.append(result)
-
-                    title = (
-                        result.get("content_info", {}) or {}
-                    ).get("title", "Source")
-
-                    st.write(
-                        f"✅ Completed: **{title}** — "
-                        f"{len(result['comments']):,} comments analysed."
-                    )
-
-                except Exception as source_error:
-                    errors.append(
-                        (source_url, str(source_error))
-                    )
-                    st.write(
-                        f"❌ Source {index + 1} failed: "
-                        f"{source_error}"
-                    )
-
-            # SINGLE SOURCE: one failure means no report.
-            if analysis_mode == "Single source":
-                if errors or len(results) != 1:
-                    st.session_state.analysis_errors = errors
-                    status.update(
-                        label="❌ Analysis failed",
-                        state="error",
-                        expanded=True,
-                    )
-                    details = "\n".join(
-                        [f"• {url}: {err}" for url, err in errors]
-                    )
-                    raise RuntimeError(
-                        "The source could not be analysed.\n\n"
-                        + details
-                    )
-
-                result = results[0]
-                st.session_state.analysis_result = result
-                st.session_state.content_info = result["content_info"]
-                st.session_state.content_type = result["content_type"]
-                st.session_state.channel_videos = result["channel_videos"]
-
-            # COMPARISON: ALL sources must succeed.
-            else:
-                if errors or len(results) != len(urls):
-                    st.session_state.analysis_errors = errors
-                    st.session_state.comparison_results = []
-                    st.session_state.comparison_type = None
-
-                    status.update(
-                        label=(
-                            f"❌ Comparison stopped — "
-                            f"{len(results)}/{len(urls)} sources completed"
-                        ),
-                        state="error",
-                        expanded=True,
-                    )
-
-                    details = "\n".join(
-                        [
-                            f"• {url}: {err}"
-                            for url, err in errors
-                        ]
-                    )
-
-                    raise RuntimeError(
-                        f"Comparison was not created because "
-                        f"{len(errors)} source(s) failed. "
-                        f"All {len(urls)} sources must succeed.\n\n"
-                        + details
-                    )
-
-                st.session_state.comparison_results = results
-                st.session_state.comparison_type = (
-                    "channel"
-                    if analysis_mode == "Compare creators"
-                    else "video"
-                )
-
-            status.update(
-                label=(
-                    f"✅ Analysis complete — "
-                    f"{len(results)}/{len(urls)} source(s) processed"
-                ),
-                state="complete",
-                expanded=False,
-            )
-
-    except Exception as e:
-        st.error(f"Analysis failed: {e}")
+        try:
+            with st.status("🔄 Processing YouTube content...",expanded=True) as status:
+                content_type,info,comments,videos=analyze_youtube_url(url,comment_limit,st)
+                st.write(f"📝 Processing {len(comments):,} comments...")
+                transformer=get_transformer()
+                st.write("🧠 Running VADER and Transformer sentiment models...")
+                result=run_complete_analysis(comments,transformer_classifier=transformer,use_transformer=True)
+                st.session_state.analysis_result=result
+                st.session_state.content_info=info
+                st.session_state.content_type=content_type
+                st.session_state.channel_videos=videos
+                status.update(label="✅ Analysis complete",state="complete",expanded=False)
+        except Exception as e:
+            st.error(f"Analysis failed: {str(e)}")
 
 st.markdown('<div id="results" class="anchor-section"></div>', unsafe_allow_html=True)
-if st.session_state.analysis_errors:
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-kicker">Analysis issues</div>', unsafe_allow_html=True)
-    st.warning(
-        "The report was not displayed because one or more requested sources failed. "
-        "Fix the listed source(s) and run the comparison again."
-    )
-    for failed_url, error_text in st.session_state.analysis_errors:
-        st.error(f"{failed_url} — {error_text}")
-
-if st.session_state.comparison_results:
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-kicker">Comparison report</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Overall Comparison</div>', unsafe_allow_html=True)
-    show_comparison_results(st.session_state.comparison_results, st.session_state.comparison_type)
-elif st.session_state.analysis_result is not None:
+if st.session_state.analysis_result is not None:
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-kicker">Your analysis</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Audience results</div>', unsafe_allow_html=True)
@@ -3283,6 +3471,122 @@ else:
     st.markdown('<div class="section-kicker">Results appear here</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Run an analysis to unlock the full report</div>', unsafe_allow_html=True)
     st.info("Your sentiment breakdown, model comparison, keywords, engagement, comments and insights will appear in this section after you analyze a YouTube URL.")
+
+
+st.markdown('<div id="compare" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-kicker">Multi-creator analysis</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Compare YouTube Creators</div>', unsafe_allow_html=True)
+st.write(
+    "Enter 2–3 YouTube creator links to compare audience sentiment, comment engagement, "
+    "video-level sentiment and distinctive audience vocabulary."
+)
+
+cc1, cc2, cc3 = st.columns(3)
+
+with cc1:
+    compare_url_1 = st.text_input(
+        "Creator 1",
+        placeholder="https://www.youtube.com/@creator",
+        key="compare_url_1",
+    )
+
+with cc2:
+    compare_url_2 = st.text_input(
+        "Creator 2",
+        placeholder="https://www.youtube.com/@creator",
+        key="compare_url_2",
+    )
+
+with cc3:
+    compare_url_3 = st.text_input(
+        "Creator 3 (optional)",
+        placeholder="https://www.youtube.com/@creator",
+        key="compare_url_3",
+    )
+
+cmp1, cmp2 = st.columns(2)
+
+with cmp1:
+    comparison_videos = st.slider(
+        "Videos per creator",
+        2,
+        10,
+        5,
+        1,
+        key="comparison_videos",
+        help="The same number of videos is sampled for every creator.",
+    )
+
+with cmp2:
+    comparison_comments = st.slider(
+        "Comments per video",
+        25,
+        200,
+        50,
+        25,
+        key="comparison_comments",
+        help="The same number of comments is collected from every sampled video.",
+    )
+
+if st.button(
+    "⚖️ Compare Creators",
+    type="primary",
+    width="stretch",
+    key="compare_creators_button",
+):
+    compare_urls = [
+        compare_url_1,
+        compare_url_2,
+        compare_url_3,
+    ]
+    compare_urls = [
+        value.strip()
+        for value in compare_urls
+        if value and value.strip()
+    ]
+
+    if len(compare_urls) < 2:
+        st.warning("Enter at least two YouTube creator links.")
+    elif len(compare_urls) > 3:
+        st.warning("Compare two or three creators at a time.")
+    else:
+        try:
+            with st.status(
+                "🔄 Collecting and comparing creators...",
+                expanded=True,
+            ) as status:
+                transformer = get_transformer()
+
+                def comparison_progress(index, message):
+                    st.write(f"**{message}**")
+
+                comparison_result = compare_creators(
+                    compare_urls,
+                    max_videos=comparison_videos,
+                    comments_per_video=comparison_comments,
+                    transformer_classifier=transformer,
+                    progress_callback=comparison_progress,
+                )
+
+                st.session_state.comparison_result = comparison_result
+
+                status.update(
+                    label="✅ Creator comparison complete",
+                    state="complete",
+                    expanded=False,
+                )
+        except Exception as error:
+            st.error(f"Creator comparison failed: {error}")
+
+if st.session_state.comparison_result is not None:
+    show_creator_comparison(
+        st.session_state.comparison_result
+    )
+else:
+    st.info(
+        "Use the controls above to build a balanced 2–3 creator comparison."
+    )
 
 st.markdown('<div id="demo" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
@@ -3303,8 +3607,6 @@ if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze
         st.warning("Enter a comment first.")
     else:
         result=get_vader_sentiment(comment)
-        sarcasm_detector=get_sarcasm_detector()
-        sarcasm_result=detect_sarcasm(comment,detector=sarcasm_detector)
         sentiment=result["sentiment"]
         st.subheader(f"Detected sentiment: {sentiment.title()}")
         c1,c2,c3,c4=st.columns(4)
@@ -3312,17 +3614,7 @@ if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze
         with c2: metric_card("Neutral",f"{result['neutral_score']:.2%}")
         with c3: metric_card("Negative",f"{result['negative_score']:.2%}")
         with c4: metric_card("Compound",f"{result['compound_score']:.3f}")
-        st.markdown('<div class="section-title">🎭 Tone & sarcasm</div>',unsafe_allow_html=True)
-        if sarcasm_result["sarcasm_label"]=="unavailable":
-            st.warning("Sarcasm detector is unavailable, but sentiment analysis worked normally.")
-        else:
-            s1,s2=st.columns(2)
-            with s1: metric_card("Potential Sarcasm","Yes" if sarcasm_result["is_sarcastic"] else "No")
-            with s2: metric_card("Detector Confidence",f"{sarcasm_result['sarcasm_score']:.1%}")
-            if sarcasm_result["is_sarcastic"]:
-                st.warning("This comment may be sarcastic. Sarcasm detection is a model prediction, not a certainty.")
-            else:
-                st.success("The sarcasm detector did not identify this comment as sarcastic.")
+
         if sentiment=="positive":
             context="The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
         elif sentiment=="negative":
