@@ -1049,15 +1049,15 @@ def show_engagement(result):
 
         fig = px.bar(
             engagement,
-            x="vader_sentiment",
+            x="sentiment",
             y="total_likes",
             text="total_likes",
             title="Total Likes by Sentiment",
             labels={
-                "vader_sentiment": "Sentiment",
+                "sentiment": "Sentiment",
                 "total_likes": "Total Likes"
             },
-            color="vader_sentiment",
+            color="sentiment",
             color_discrete_map={
                 "positive": "#22c55e",
                 "neutral": "#94a3b8",
@@ -1096,15 +1096,15 @@ def show_engagement(result):
 
         fig = px.bar(
             engagement,
-            x="vader_sentiment",
+            x="sentiment",
             y="average_likes",
             text="average_likes",
             title="Average Likes per Comment",
             labels={
-                "vader_sentiment": "Sentiment",
+                "sentiment": "Sentiment",
                 "average_likes": "Average Likes"
             },
-            color="vader_sentiment",
+            color="sentiment",
             color_discrete_map={
                 "positive": "#22c55e",
                 "neutral": "#94a3b8",
@@ -1141,15 +1141,15 @@ def show_engagement(result):
 
     fig = px.bar(
         engagement,
-        x="vader_sentiment",
+        x="sentiment",
         y="comments",
         text="comments",
         title="Comment Volume by Sentiment",
         labels={
-            "vader_sentiment": "Sentiment",
+            "sentiment": "Sentiment",
             "comments": "Number of Comments"
         },
-        color="vader_sentiment",
+        color="sentiment",
         color_discrete_map={
             "positive": "#22c55e",
             "neutral": "#94a3b8",
@@ -1183,8 +1183,8 @@ def show_engagement(result):
 
     display_df = engagement.copy()
 
-    display_df["vader_sentiment"] = (
-        display_df["vader_sentiment"]
+    display_df["sentiment"] = (
+        display_df["sentiment"]
         .str.title()
     )
 
@@ -1264,7 +1264,7 @@ def show_comments(result):
     )
 
     filtered = data[
-        data["vader_sentiment"]
+        data["primary_sentiment"]
         .isin(sentiment_filter)
     ].copy()
 
@@ -1292,7 +1292,7 @@ def show_comments(result):
 
     display_columns = [
         "comment_text",
-        "vader_sentiment",
+        "primary_sentiment",
         "like_count",
     ]
 
@@ -1501,7 +1501,7 @@ def show_channel_breakdown(
             continue
 
         counts = (
-            subset["vader_sentiment"]
+            subset["primary_sentiment"]
             .value_counts()
         )
 
@@ -2788,7 +2788,6 @@ if page == "🏠 Home":
                         comments,
                         transformer_classifier=transformer,
                         use_transformer=True,
-                        use_sarcasm=False,
                     )
 
                     st.session_state.analysis_result = (
@@ -2952,7 +2951,6 @@ elif page == "🔎 Analyze":
                         comments,
                         transformer_classifier=transformer,
                         use_transformer=True,
-                        use_sarcasm=False,
                     )
 
                     st.session_state.analysis_result = (

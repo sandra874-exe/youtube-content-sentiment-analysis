@@ -24,16 +24,16 @@ _VADER = SentimentIntensityAnalyzer()
 # ============================================================
 
 def clean_text(text: Any) -> str:
-    """Clean a YouTube comment while keeping useful words."""
+    """Clean a YouTube comment using the project cleaning rules."""
+    from html import unescape
+
     if pd.isna(text):
         return ""
 
-    text = str(text)
+    text = unescape(str(text))
     text = re.sub(r"https?://\S+|www\.\S+", " ", text)
-    text = re.sub(r"@[A-Za-z0-9_]+", " ", text)
-    text = re.sub(r"#[A-Za-z0-9_]+", " ", text)
-    text = re.sub(r"[^\w\s'!?.,-]", " ", text, flags=re.UNICODE)
-    text = re.sub(r"\s+", " ", text).strip().lower()
+    text = re.sub(r"\s+", " ", text).strip()
+
     return text
 
 
@@ -217,49 +217,103 @@ def analyze_transformer(
 # SUMMARIES / ENGAGEMENT
 # ============================================================
 
-def sentiment_summary(dataframe: pd.DataFrame) -> pd.DataFrame:
+def sentiment_summary(
+    dataframe: pd.DataFrame,
+    sentiment_column: str = "vader_sentiment",
+) -> pd.DataFrame:
     if dataframe is None or dataframe.empty:
         return pd.DataFrame(columns=["sentiment", "count", "percentage"])
 
-    counts = dataframe["vader_sentiment"].value_counts().reindex(SENTIMENT_ORDER, fill_value=0)
+    if sentiment_column not in dataframe.columns:
+        raise ValueError(
+            f"Sentiment column '{sentiment_column}' was not found."
+        )
+
+    counts = (
+        dataframe[sentiment_column]
+        .value_counts()
+        .reindex(SENTIMENT_ORDER, fill_value=0)
+    )
+
     total = int(counts.sum())
 
     result = pd.DataFrame({
         "sentiment": SENTIMENT_ORDER,
         "count": counts.astype(int).values,
     })
+
     result["percentage"] = (
         result["count"] / total * 100 if total else 0
     )
+
     result["percentage"] = result["percentage"].round(2)
+
     return result
 
 
-def engagement_analysis(dataframe: pd.DataFrame) -> pd.DataFrame:
+def engagement_analysis(
+    dataframe: pd.DataFrame,
+    sentiment_column: str = "vader_sentiment",
+) -> pd.DataFrame:
     if dataframe is None or dataframe.empty:
         return pd.DataFrame(columns=[
-            "vader_sentiment", "comments", "average_likes", "total_likes"
+            "sentiment", "comments", "average_likes", "total_likes"
         ])
 
+    if sentiment_column not in dataframe.columns:
+        raise ValueError(
+            f"Sentiment column '{sentiment_column}' was not found."
+        )
+
     df = dataframe.copy()
+
     if "like_count" not in df.columns:
         df["like_count"] = 0
-    df["like_count"] = pd.to_numeric(df["like_count"], errors="coerce").fillna(0)
+
+    df["like_count"] = pd.to_numeric(
+        df["like_count"],
+        errors="coerce",
+    ).fillna(0)
 
     result = (
-        df.groupby("vader_sentiment")
+        df.groupby(sentiment_column)
         .agg(
             comments=("comment_text", "count"),
             average_likes=("like_count", "mean"),
             total_likes=("like_count", "sum"),
         )
         .reindex(SENTIMENT_ORDER, fill_value=0)
+        .rename_axis("sentiment")
         .reset_index()
     )
 
-    result["comments"] = pd.to_numeric(result["comments"], errors="coerce").fillna(0).astype(int)
-    result["average_likes"] = pd.to_numeric(result["average_likes"], errors="coerce").fillna(0).round(2)
-    result["total_likes"] = pd.to_numeric(result["total_likes"], errors="coerce").fillna(0).astype(int)
+    result["comments"] = (
+        pd.to_numeric(
+            result["comments"],
+            errors="coerce",
+        )
+        .fillna(0)
+        .astype(int)
+    )
+
+    result["average_likes"] = (
+        pd.to_numeric(
+            result["average_likes"],
+            errors="coerce",
+        )
+        .fillna(0)
+        .round(2)
+    )
+
+    result["total_likes"] = (
+        pd.to_numeric(
+            result["total_likes"],
+            errors="coerce",
+        )
+        .fillna(0)
+        .astype(int)
+    )
+
     return result
 
 
@@ -293,26 +347,51 @@ def comment_statistics(dataframe: pd.DataFrame) -> Dict[str, float]:
 # KEYWORDS / TF-IDF
 # ============================================================
 
-def _text_for_sentiment(dataframe: pd.DataFrame, sentiment: Optional[str]) -> List[str]:
+def _text_for_sentiment(
+    dataframe: pd.DataFrame,
+    sentiment: Optional[str],
+    sentiment_column: str = "vader_sentiment",
+) -> List[str]:
     if dataframe is None or dataframe.empty:
         return []
 
+    if sentiment_column not in dataframe.columns:
+        raise ValueError(
+            f"Sentiment column '{sentiment_column}' was not found."
+        )
+
     df = dataframe
+
     if sentiment and sentiment.lower() != "all":
-        df = df[df["vader_sentiment"].astype(str).str.lower() == sentiment.lower()]
+        df = df[
+            df[sentiment_column]
+            .astype(str)
+            .str.lower()
+            == sentiment.lower()
+        ]
 
     if df.empty:
         return []
 
-    return df["clean_text"].fillna(df["comment_text"].fillna("")).astype(str).tolist()
+    return (
+        df["clean_text"]
+        .fillna(df["comment_text"].fillna(""))
+        .astype(str)
+        .tolist()
+    )
 
 
 def extract_keywords(
     dataframe: pd.DataFrame,
     sentiment: Optional[str] = None,
     top_n: int = 20,
+    sentiment_column: str = "vader_sentiment",
 ) -> pd.DataFrame:
-    texts = _text_for_sentiment(dataframe, sentiment)
+    texts = _text_for_sentiment(
+        dataframe,
+        sentiment,
+        sentiment_column,
+    )
     empty = pd.DataFrame(columns=["word", "frequency"])
     if not texts:
         return empty
@@ -338,8 +417,13 @@ def extract_tfidf(
     dataframe: pd.DataFrame,
     sentiment: Optional[str] = None,
     top_n: int = 20,
+    sentiment_column: str = "vader_sentiment",
 ) -> pd.DataFrame:
-    texts = _text_for_sentiment(dataframe, sentiment)
+    texts = _text_for_sentiment(
+        dataframe,
+        sentiment,
+        sentiment_column,
+    )
     empty = pd.DataFrame(columns=["term", "tfidf"])
     if not texts:
         return empty
@@ -365,11 +449,24 @@ def extract_tfidf(
 # EXAMPLES / MODEL AGREEMENT / INSIGHTS
 # ============================================================
 
-def get_comment_examples(dataframe: pd.DataFrame, sentiment: str, n: int = 5) -> pd.DataFrame:
-    if dataframe is None or dataframe.empty or "vader_sentiment" not in dataframe.columns:
+def get_comment_examples(
+    dataframe: pd.DataFrame,
+    sentiment: str,
+    n: int = 5,
+    sentiment_column: str = "vader_sentiment",
+) -> pd.DataFrame:
+    if (
+        dataframe is None
+        or dataframe.empty
+        or sentiment_column not in dataframe.columns
+    ):
         return pd.DataFrame()
+
     return dataframe[
-        dataframe["vader_sentiment"].astype(str).str.lower() == sentiment.lower()
+        dataframe[sentiment_column]
+        .astype(str)
+        .str.lower()
+        == sentiment.lower()
     ].head(n).copy()
 
 
@@ -388,15 +485,27 @@ def model_agreement(dataframe: pd.DataFrame) -> float:
     )
 
 
-def generate_insights(dataframe: pd.DataFrame, summary: Optional[pd.DataFrame] = None) -> List[str]:
+def generate_insights(
+    dataframe: pd.DataFrame,
+    summary: Optional[pd.DataFrame] = None,
+    sentiment_column: str = "vader_sentiment",
+) -> List[str]:
     if dataframe is None or dataframe.empty:
         return ["There are not enough comments to generate audience insights."]
 
+    if sentiment_column not in dataframe.columns:
+        raise ValueError(
+            f"Sentiment column '{sentiment_column}' was not found."
+        )
+
     if summary is None:
-        summary = sentiment_summary(dataframe)
+        summary = sentiment_summary(
+            dataframe,
+            sentiment_column=sentiment_column,
+        )
 
     total = len(dataframe)
-    counts = dataframe["vader_sentiment"].value_counts()
+    counts = dataframe[sentiment_column].value_counts()
     dominant = counts.idxmax() if not counts.empty else "neutral"
     dominant_pct = counts.get(dominant, 0) / total * 100
 
@@ -465,33 +574,112 @@ def run_complete_analysis(
     df = analyze_vader(df)
 
     if use_transformer:
-        df = analyze_transformer(df, classifier=transformer_classifier)
+        df = analyze_transformer(
+            df,
+            classifier=transformer_classifier,
+        )
 
-    summary = sentiment_summary(df)
-    engagement = engagement_analysis(df)
+    if (
+        "transformer_sentiment" in df.columns
+        and df["transformer_sentiment"].notna().any()
+    ):
+        df["primary_sentiment"] = df["transformer_sentiment"].fillna(
+            df["vader_sentiment"]
+        )
+        df["primary_model"] = df["transformer_sentiment"].notna().map(
+            {
+                True: "Transformer",
+                False: "VADER",
+            }
+        )
+    else:
+        df["primary_sentiment"] = df["vader_sentiment"]
+        df["primary_model"] = "VADER"
+
+    primary_column = "primary_sentiment"
+
+    summary = sentiment_summary(
+        df,
+        sentiment_column=primary_column,
+    )
+
+    engagement = engagement_analysis(
+        df,
+        sentiment_column=primary_column,
+    )
+
     statistics = comment_statistics(df)
 
     keywords = {
-        "all": extract_keywords(df, None, 20),
-        "positive": extract_keywords(df, "positive", 20),
-        "neutral": extract_keywords(df, "neutral", 20),
-        "negative": extract_keywords(df, "negative", 20),
+        "all": extract_keywords(
+            df,
+            None,
+            20,
+            primary_column,
+        ),
+        "positive": extract_keywords(
+            df,
+            "positive",
+            20,
+            primary_column,
+        ),
+        "neutral": extract_keywords(
+            df,
+            "neutral",
+            20,
+            primary_column,
+        ),
+        "negative": extract_keywords(
+            df,
+            "negative",
+            20,
+            primary_column,
+        ),
     }
 
     tfidf = {
-        "all": extract_tfidf(df, None, 20),
-        "positive": extract_tfidf(df, "positive", 20),
-        "neutral": extract_tfidf(df, "neutral", 20),
-        "negative": extract_tfidf(df, "negative", 20),
+        "all": extract_tfidf(
+            df,
+            None,
+            20,
+            primary_column,
+        ),
+        "positive": extract_tfidf(
+            df,
+            "positive",
+            20,
+            primary_column,
+        ),
+        "neutral": extract_tfidf(
+            df,
+            "neutral",
+            20,
+            primary_column,
+        ),
+        "negative": extract_tfidf(
+            df,
+            "negative",
+            20,
+            primary_column,
+        ),
     }
 
     return {
         "comments": df,
         "summary": summary,
         "statistics": statistics,
-        "insights": generate_insights(df, summary),
+        "insights": generate_insights(
+            df,
+            summary,
+            sentiment_column=primary_column,
+        ),
         "keywords": keywords,
         "tfidf": tfidf,
         "engagement": engagement,
         "model_agreement": model_agreement(df),
+        "primary_model": (
+            "Transformer"
+            if df["primary_model"].eq("Transformer").any()
+            else "VADER"
+        ),
     }
