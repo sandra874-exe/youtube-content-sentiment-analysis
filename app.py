@@ -1,5 +1,6 @@
 from pathlib import Path
 import math
+import re
 
 import streamlit as st
 import pandas as pd
@@ -59,122 +60,312 @@ DATA_DIR = (
 # ============================================================
 
 st.markdown(
-    """
-    <style>
+    """<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-    .main {
-        background: #f8fafc;
+    :root {
+        --canvas: #F7F4EF;
+        --card: #FFFFFF;
+        --coral: #D95F43;
+        --coral-dark: #A83D28;
+        --peach: #FFD9CF;
+        --mint: #C7EAE4;
+        --sage: #A7C4B5;
+        --lavender: #D6D2E8;
+        --blue: #BDD4E7;
+        --rose: #F4B8C1;
+        --ink: #202638;
+        --muted: #465064;
+        --faint: #697386;
+        --border: #DED8D0;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body,
+    .stApp,
+    .main,
+    [data-testid="stAppViewContainer"] {
+        background: var(--canvas) !important;
+        color: var(--ink) !important;
+    }
+
+    /* Hide Streamlit's native header so it cannot cover the custom navigation. */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+
+    [data-testid="stToolbar"] {
+        display: none !important;
     }
 
     .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1450px;
+        padding-top: 1rem !important;
+        padding-bottom: 4rem;
+        max-width: 1500px;
     }
 
-    [data-testid="stSidebar"] {
-        background: #111827;
+    /* Custom one-page navigation */
+    .topbar {
+        position: sticky;
+        top: .75rem;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .75rem 1rem;
+        margin-bottom: 1.6rem;
+        background: #FFFFFF;
+        border: 1px solid #D8D2C9;
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(32,38,56,.12);
+        backdrop-filter: blur(14px);
     }
 
-    [data-testid="stSidebar"] * {
-        color: #f8fafc !important;
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        color: #202638 !important;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-weight: 800;
+        font-size: 1.05rem;
+        white-space: nowrap;
     }
 
+    .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: #FFD3C8;
+        color: #8F321E;
+        font-size: 1.05rem;
+    }
+
+    .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: .35rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .topnav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .topnav a {
+        display: inline-block;
+        padding: .55rem .85rem;
+        border-radius: 999px;
+        color: #374151 !important;
+        text-decoration: none !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: .82rem;
+        font-weight: 700;
+        white-space: nowrap;
+        transition: all .18s ease;
+    }
+
+    .topnav a:hover {
+        background: #FFE0D8;
+        color: #8F321E !important;
+    }
+
+    .anchor-section {
+        scroll-margin-top: 105px;
+    }
+
+    /* Main hero */
     .hero {
-        padding: 35px;
-        border-radius: 24px;
-        background:
-            linear-gradient(
-                135deg,
-                #111827 0%,
-                #312e81 55%,
-                #7c3aed 100%
-            );
-        color: white;
-        margin-bottom: 25px;
-        box-shadow:
-            0 15px 40px rgba(15, 23, 42, 0.20);
+        padding: 2.35rem;
+        border-radius: 22px;
+        background: linear-gradient(135deg, #FFEDE6 0%, #F8E6E1 52%, #E8E5F2 100%);
+        border: 1px solid #DCD5D0;
+        color: var(--ink);
+        margin-bottom: 1.6rem;
+        box-shadow: 0 12px 34px rgba(32,38,56,.09);
     }
 
     .hero h1 {
-        font-size: 46px;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: clamp(2.1rem, 4vw, 3.15rem);
+        line-height: 1.08;
         font-weight: 800;
-        margin-bottom: 10px;
+        margin: .75rem 0 .7rem 0;
+        color: #1E2537 !important;
+        letter-spacing: -.025em;
     }
 
     .hero p {
-        font-size: 18px;
-        opacity: 0.9;
-    }
-
-    .metric-card {
-        background: white;
-        padding: 22px;
-        border-radius: 18px;
-        border: 1px solid #e5e7eb;
-        box-shadow:
-            0 6px 20px rgba(15, 23, 42, 0.06);
-        min-height: 125px;
-    }
-
-    .metric-label {
-        color: #64748b;
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .metric-value {
-        color: #111827;
-        font-size: 30px;
-        font-weight: 800;
-        margin-top: 8px;
-    }
-
-    .section-title {
-        font-size: 26px;
-        font-weight: 800;
-        color: #111827;
-        margin-top: 20px;
-        margin-bottom: 12px;
-    }
-
-    .insight-card {
-        background: white;
-        padding: 18px 20px;
-        border-radius: 16px;
-        border-left: 5px solid #7c3aed;
-        margin-bottom: 12px;
-        box-shadow:
-            0 5px 16px rgba(15, 23, 42, 0.06);
-    }
-
-    .video-card {
-        background: white;
-        padding: 18px;
-        border-radius: 16px;
-        border: 1px solid #e5e7eb;
-        margin-bottom: 12px;
-        box-shadow:
-            0 5px 15px rgba(15, 23, 42, 0.05);
-    }
-
-    .small-muted {
-        color: #64748b;
-        font-size: 13px;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 1rem;
+        line-height: 1.7;
+        color: #465064 !important;
+        max-width: 900px;
+        margin: 0;
+        font-weight: 500;
     }
 
     .badge {
         display: inline-block;
-        padding: 5px 10px;
-        border-radius: 20px;
-        background: #ede9fe;
-        color: #6d28d9;
-        font-size: 12px;
-        font-weight: 700;
+        padding: .4rem .75rem;
+        border-radius: 999px;
+        background: #FFD2C7;
+        color: #8F321E !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .05em;
     }
 
-    </style>
-    """,
+    .section-title {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: #202638 !important;
+        margin-top: 1.7rem;
+        margin-bottom: .65rem;
+        scroll-margin-top: 105px;
+    }
+
+    .section-kicker {
+        color: #596579 !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: .78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .09em;
+        margin-bottom: .35rem;
+    }
+
+    .metric-card {
+        background: #FFFFFF;
+        padding: 1.15rem;
+        border-radius: 16px;
+        border: 1px solid #DED8D0;
+        box-shadow: 0 5px 22px rgba(32,38,56,.07);
+        min-height: 115px;
+    }
+
+    .metric-label {
+        color: #596579 !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: .72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+
+    .metric-value {
+        color: #202638 !important;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 1.9rem;
+        font-weight: 800;
+        margin-top: .45rem;
+    }
+
+    .insight-card,
+    .video-card {
+        background: #FFFFFF;
+        border: 1px solid #DED8D0;
+        border-radius: 16px;
+        box-shadow: 0 5px 22px rgba(32,38,56,.07);
+    }
+
+    .insight-card {
+        padding: 1rem 1.1rem;
+        border-left: 5px solid var(--coral);
+        margin-bottom: .7rem;
+        color: #30394C !important;
+    }
+
+    .video-card {
+        padding: 1rem;
+        margin-bottom: .7rem;
+    }
+
+    .small-muted {
+        color: #596579 !important;
+        font-size: .8rem;
+    }
+
+    /* Streamlit text and controls */
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li,
+    [data-testid="stMarkdownContainer"] label {
+        color: #30394C;
+    }
+
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextArea"] textarea {
+        background: #FFFFFF !important;
+        color: #202638 !important;
+        border: 1px solid #CFC8BF !important;
+        border-radius: 10px !important;
+    }
+
+    div[data-testid="stTextInput"] input::placeholder,
+    div[data-testid="stTextArea"] textarea::placeholder {
+        color: #7A8495 !important;
+        opacity: 1 !important;
+    }
+
+    div[data-testid="stButton"] > button {
+        border-radius: 10px;
+        border: 1px solid var(--coral);
+        background: var(--coral);
+        color: #FFFFFF !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 800;
+    }
+
+    div[data-testid="stButton"] > button:hover {
+        background: #C94F35;
+        border-color: #C94F35;
+        box-shadow: 0 6px 18px rgba(217,95,67,.28);
+    }
+
+    div[data-testid="stSlider"] [role="slider"] {
+        background: var(--coral);
+    }
+
+    .section-divider {
+        height: 1px;
+        background: #D9D3CA;
+        margin: 2.5rem 0;
+    }
+
+    .footer-note {
+        text-align: center;
+        color: #697386 !important;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: .75rem;
+        padding: 2rem 0 .5rem;
+    }
+
+    @media (max-width: 800px) {
+        .topbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .topnav {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .hero {
+            padding: 1.4rem;
+        }
+    }
+    </style>""",
     unsafe_allow_html=True,
 )
 
@@ -205,6 +396,15 @@ if "content_type" not in st.session_state:
 
 if "channel_videos" not in st.session_state:
     st.session_state.channel_videos = []
+
+if "comparison_results" not in st.session_state:
+    st.session_state.comparison_results = []
+
+if "comparison_type" not in st.session_state:
+    st.session_state.comparison_type = None
+
+if "analysis_errors" not in st.session_state:
+    st.session_state.analysis_errors = []
 
 
 # ============================================================
@@ -604,6 +804,192 @@ def analyze_youtube_url(
 
 
 # ============================================================
+# MULTI-URL ANALYSIS / COMPARISON
+# ============================================================
+
+def parse_youtube_urls(raw_text, minimum=1, maximum=5):
+    """Parse and validate a batch of YouTube URLs without silently dropping entries."""
+    text = (raw_text or "").strip()
+
+    if not text:
+        raise ValueError(f"Please enter at least {minimum} YouTube URL(s).")
+
+    # Accept one URL per line, comma-separated URLs, or pasted URLs with bullets.
+    candidates = re.findall(
+        r"https?://(?:www\.)?(?:youtube\.com|youtu\.be)/[^\s,]+",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not candidates:
+        candidates = [line.strip().strip("-•,") for line in text.splitlines() if line.strip()]
+
+    urls = []
+    for raw_url in candidates:
+        url = raw_url.strip().strip("\"'(),[]{}<>.,")
+        if url and url not in urls:
+            urls.append(url)
+
+    if len(urls) < minimum:
+        raise ValueError(
+            f"Only {len(urls)} YouTube URL(s) were detected. "
+            f"Please enter exactly {minimum if minimum == maximum else f'{minimum}–{maximum}'} valid URL(s)."
+        )
+
+    if len(urls) > maximum:
+        raise ValueError(f"Please enter no more than {maximum} YouTube URLs at a time.")
+
+    return urls
+
+
+def analyze_source(url, comment_limit, transformer, progress=None):
+    content_type, info, comments, videos = analyze_youtube_url(
+        url,
+        comment_limit,
+        progress,
+    )
+
+    # Main sentiment pipeline: NO sarcasm arguments here.
+    result = run_complete_analysis(
+        comments,
+        transformer_classifier=transformer,
+        use_transformer=True,
+    )
+
+    result["source_url"] = url
+    result["content_type"] = content_type
+    result["content_info"] = info
+    result["channel_videos"] = videos
+    return result
+
+
+def build_comparison_row(result, index):
+    info = result.get("content_info", {}) or {}
+    comments = result.get("comments", pd.DataFrame())
+    summary = result.get("summary", pd.DataFrame())
+
+    if result.get("content_type") == "video":
+        title = info.get("title", "YouTube Video")
+    else:
+        title = info.get("title", info.get("channel_title", "YouTube Channel"))
+
+    def pct(sentiment):
+        if summary is None or summary.empty or "sentiment" not in summary.columns:
+            return 0.0
+        row = summary[summary["sentiment"] == sentiment]
+        return float(row.iloc[0]["percentage"]) if not row.empty else 0.0
+
+    stats = result.get("statistics", {}) or {}
+    return {
+        "Source": f"{index + 1}. {title or 'Source'}",
+        "Type": str(result.get("content_type", "")).title(),
+        "Comments Analysed": len(comments),
+        "Positive %": round(pct("positive"), 1),
+        "Neutral %": round(pct("neutral"), 1),
+        "Negative %": round(pct("negative"), 1),
+        "Average Likes": round(float(stats.get("average_likes", 0) or 0), 1),
+        "URL": result.get("source_url", ""),
+    }
+
+
+def show_comparison_results(results, comparison_type):
+    if not results:
+        return
+
+    section_title("⚖️ Comparison Overview")
+    st.write(
+        "Each source is analysed independently, then compared side-by-side. "
+        "Sentiment percentages are calculated from the comments collected for that source."
+    )
+
+    rows = [build_comparison_row(r, i) for i, r in enumerate(results)]
+    comparison_df = pd.DataFrame(rows)
+
+    total_comments = int(comparison_df["Comments Analysed"].sum())
+    avg_positive = float(comparison_df["Positive %"].mean())
+    avg_negative = float(comparison_df["Negative %"].mean())
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        metric_card("Sources Compared", len(results))
+    with c2:
+        metric_card("Comments Analysed", format_number(total_comments))
+    with c3:
+        metric_card("Avg. Positive %", f"{avg_positive:.1f}%")
+    with c4:
+        metric_card("Avg. Negative %", f"{avg_negative:.1f}%")
+
+    chart_df = comparison_df.melt(
+        id_vars=["Source"],
+        value_vars=["Positive %", "Neutral %", "Negative %"],
+        var_name="Sentiment",
+        value_name="Percentage",
+    )
+    chart_df["Sentiment"] = chart_df["Sentiment"].str.replace(" %", "", regex=False)
+
+    fig = px.bar(
+        chart_df,
+        x="Source",
+        y="Percentage",
+        color="Sentiment",
+        barmode="group",
+        text="Percentage",
+        color_discrete_map={
+            "Positive": SENTIMENT_COLORS["positive"],
+            "Neutral": SENTIMENT_COLORS["neutral"],
+            "Negative": SENTIMENT_COLORS["negative"],
+        },
+        title=("Creator" if comparison_type == "channel" else "Video") + " Sentiment Comparison",
+    )
+    fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig.update_layout(
+        yaxis_title="Percentage of analysed comments",
+        xaxis_title="",
+        height=500,
+        legend_title="Sentiment",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Side-by-side results")
+    st.dataframe(
+        comparison_df.drop(columns=["URL"]),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    engagement_df = comparison_df[["Source", "Average Likes"]].copy()
+    fig2 = px.bar(
+        engagement_df,
+        x="Source",
+        y="Average Likes",
+        text="Average Likes",
+        title="Average Comment Likes by Source",
+    )
+    fig2.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+    fig2.update_layout(height=420, xaxis_title="", yaxis_title="Average likes")
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Individual source reports")
+    tab_labels = []
+    for i, result in enumerate(results):
+        label = build_comparison_row(result, i)["Source"]
+        tab_labels.append(label[:40])
+
+    tabs = st.tabs(tab_labels)
+    for idx, (tab, result) in enumerate(zip(tabs, results)):
+        with tab:
+            info = result.get("content_info", {}) or {}
+            content_type = result.get("content_type")
+            show_overview(result, info, content_type)
+            if content_type == "channel":
+                show_channel_breakdown(result, result.get("channel_videos", []))
+            show_topics(result, key_suffix=f"_comparison_{idx}")
+            show_engagement(result)
+            show_comments(result, key_suffix=f"_comparison_{idx}")
+            show_models(result)
+
+
+# ============================================================
 # ANALYSIS DISPLAY
 # ============================================================
 
@@ -832,7 +1218,7 @@ def show_overview(
 # TOPICS / KEYWORDS
 # ============================================================
 
-def show_topics(result):
+def show_topics(result, key_suffix=""):
 
     section_title(
         "🔑 Topics & Language"
@@ -847,7 +1233,7 @@ def show_topics(result):
             "negative",
         ],
         format_func=lambda x: x.title(),
-        key="keyword_sentiment",
+        key=f"keyword_sentiment{key_suffix}",
     )
 
     keywords = result[
@@ -1215,7 +1601,7 @@ def show_engagement(result):
 # COMMENTS
 # ============================================================
 
-def show_comments(result):
+def show_comments(result, key_suffix=""):
 
     section_title(
         "💬 Comment Explorer"
@@ -1243,10 +1629,12 @@ def show_comments(result):
             "neutral",
             "negative",
         ],
+        key=f"comments_sentiment_filter{key_suffix}",
     )
 
     search = st.text_input(
-        "🔎 Search comments"
+        "🔎 Search comments",
+        key=f"comments_search{key_suffix}",
     )
 
     min_likes = st.slider(
@@ -1261,6 +1649,7 @@ def show_comments(result):
             )
         ),
         value=0,
+        key=f"comments_min_likes{key_suffix}",
     )
 
     filtered = data[
@@ -1734,7 +2123,6 @@ def show_analysis_results():
             "🔑 Topics",
             "❤️ Engagement",
             "💬 Comments",
-            "🎭 Sarcasm",
             "🧠 Models",
         ]
     )
@@ -1767,12 +2155,6 @@ def show_analysis_results():
         )
 
     with tabs[4]:
-
-        show_sarcasm(
-            result
-        )
-
-    with tabs[5]:
 
         show_models(
             result
@@ -2615,682 +2997,373 @@ def show_demo_dashboard():
             )
 
 
-# ============================================================
-# COMMENT ANALYZER HELPERS
-# ============================================================
-
-def explain_sarcasm_context(comment: str, sentiment: str, is_sarcastic: bool) -> dict:
-    """Create a human-friendly explanation of a sarcasm prediction.
-
-    This is an interpretation layer, not a second ML prediction.
-    It uses visible language cues plus the detected sentiment.
-    """
-    text = str(comment).strip()
-    lower = text.lower()
-
-    if not is_sarcastic:
-        return {
-            "context": "Straightforward tone",
-            "why": "The sarcasm model did not flag the comment as sarcastic.",
-            "meaning": "The detected sentiment can be read relatively directly from the wording.",
-        }
-
-    if sentiment == "positive":
-        context = "Praise that may be deliberately exaggerated"
-        meaning = "The wording sounds positive, but the commenter may be using exaggerated praise to make a critical or playful point."
-    elif sentiment == "negative":
-        context = "Mocking or ironic criticism"
-        meaning = "The comment carries negative language and may be using irony to make the criticism sharper or more humorous."
-    else:
-        context = "Playful irony / mixed tone"
-        meaning = "The wording is not strongly positive or negative, so the sarcasm may come mainly from the contrast between the words and the intended tone."
-
-    cues = []
-    if "!" in text:
-        cues.append("strong punctuation")
-    if "?" in text:
-        cues.append("rhetorical-question style")
-    if any(word in lower for word in ["yeah right", "sure", "totally", "obviously", "of course", "love that", "great job", "amazing"]):
-        cues.append("exaggerated or ironic wording")
-    if text.isupper() or any(word.isupper() and len(word) > 2 for word in text.split()):
-        cues.append("emphasis/capitalisation")
-
-    cue_text = ", ".join(cues[:2]) if cues else "a mismatch between literal wording and detected tone"
-
-    return {
-        "context": context,
-        "why": f"The detector flagged possible sarcasm, with {cue_text} providing additional context for the interpretation.",
-        "meaning": meaning,
-    }
 
 
 # ============================================================
-# SIDEBAR
+# ONE-PAGE DASHBOARD NAVIGATION
 # ============================================================
 
-with st.sidebar:
-
-    st.markdown(
-        """
-        # 🎬 YouTube Pulse
-
-        **YouTube Audience Intelligence**
-        """
-    )
-
-    st.divider()
-
-    page = st.radio(
-        "Navigation",
-        [
-            "🏠 Home",
-            "🔎 Analyze",
-            "📊 Demo Dataset",
-            "💬 Comment Analyzer",
-            "ℹ️ About",
-        ],
-    )
-
-
-# ============================================================
-# HOME
-# ============================================================
-
-if page == "🏠 Home":
-
-    st.markdown(
-        """<div class="hero">
-    <div class="badge">AI-POWERED YOUTUBE ANALYTICS</div>
-
-    <h1>YouTube Pulse</h1>
-            
-    <p>
-        Understand what audiences really think about YouTube content using
-        sentiment, engagement, keywords and AI-powered analysis.
-    </p>
+st.markdown(
+    """<div class="topbar">
+    <div class="brand"><span class="brand-mark">▶</span><span>YouTube Pulse</span></div>
+    <nav class="topnav">
+        <a href="#overview">Overview</a>
+        <a href="#analyze">Analyze</a>
+        <a href="#results">Results</a>
+        <a href="#demo">Demo Dataset</a>
+        <a href="#comment-analyzer">Comment Analyzer</a>
+        <a href="#about">About</a>
+    </nav>
 </div>""",
-        unsafe_allow_html=True,
-    )
+    unsafe_allow_html=True,
+)
 
-    st.subheader(
-        "Analyze any YouTube video or channel"
-    )
+st.markdown('<div id="overview" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown(
+    """<div class="hero">
+    <div class="badge">YOUTUBE AUDIENCE INTELLIGENCE</div>
+    <h1>YouTube Pulse</h1>
+    <p>Understand what audiences really think about YouTube content through sentiment, engagement, topics, keywords and contextual NLP analysis. Everything is now available on one scrollable dashboard.</p>
+</div>""",
+    unsafe_allow_html=True,
+)
 
-    st.write(
-        "Paste a YouTube URL and discover audience "
-        "sentiment, engagement, topics, keywords "
-        "and model-based insights."
-    )
+st.markdown('<div class="section-kicker">Quick overview</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Explore the dashboard</div>', unsafe_allow_html=True)
+demo = load_demo_data()
+if not demo.empty:
+    c1,c2,c3,c4=st.columns(4)
+    with c1: metric_card("Comments", format_number(len(demo)))
+    with c2: metric_card("Creators", format_number(demo["creator"].nunique()) if "creator" in demo.columns else "0")
+    with c3: metric_card("Videos", format_number(demo["video_id"].nunique()) if "video_id" in demo.columns else "0")
+    with c4: metric_card("Domains", format_number(demo["domain"].nunique()) if "domain" in demo.columns else "0")
 
-    url = st.text_input(
+st.markdown('<div id="analyze" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-kicker">Live YouTube analysis</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Analyze & Compare YouTube Content</div>', unsafe_allow_html=True)
+st.write(
+    "Analyze one source or compare multiple creators/videos side-by-side using the same sentiment pipeline. "
+    "For comparisons, paste one YouTube URL per line."
+)
+
+analysis_mode = st.radio(
+    "What do you want to analyze?",
+    ["Single source", "Compare creators", "Compare videos"],
+    horizontal=True,
+    key="analysis_mode",
+)
+
+if analysis_mode == "Single source":
+    url_input = st.text_area(
         "YouTube URL",
-        placeholder=(
-            "https://www.youtube.com/watch?v=..."
-            " or https://www.youtube.com/@channel"
-        ),
-        key="home_url",
+        placeholder="https://www.youtube.com/watch?v=...\nor\nhttps://www.youtube.com/@channel",
+        height=90,
+        key="one_page_url",
     )
-
     comment_limit = st.slider(
         "Comments to analyze",
-        min_value=100,
-        max_value=5000,
-        value=1000,
-        step=100,
-        help=(
-            "Maximum number of comments collected "
-            "for this analysis."
-        ),
-    )
-
-    if st.button(
-        "✨ Analyze Now",
-        type="primary",
-        use_container_width=True,
-    ):
-
-        if not url.strip():
-
-            st.warning(
-                "Please enter a YouTube URL."
-            )
-
-        else:
-
-            try:
-
-                with st.status(
-                    "🔄 Analyzing...",
-                    expanded=True,
-                ) as status:
-
-                    progress = st
-
-                    content_type, info, comments, videos = (
-                        analyze_youtube_url(
-                            url,
-                            comment_limit,
-                            progress,
-                        )
-                    )
-
-                    progress.write(
-                        "🧠 Loading sentiment model..."
-                    )
-
-                    transformer = get_transformer()
-
-                    progress.write(
-                        "📊 Running VADER and Transformer sentiment analysis..."
-                    )
-
-                    result = run_complete_analysis(
-                        comments,
-                        transformer_classifier=transformer,
-                        use_transformer=True,
-                        use_sarcasm=False,
-                    )
-
-                    st.session_state.analysis_result = (
-                        result
-                    )
-
-                    st.session_state.content_info = (
-                        info
-                    )
-
-                    st.session_state.content_type = (
-                        content_type
-                    )
-
-                    st.session_state.channel_videos = (
-                        videos
-                    )
-
-                    status.update(
-                        label="✅ Analysis complete!",
-                        state="complete",
-                        expanded=False,
-                    )
-
-                st.rerun()
-
-            except Exception as e:
-
-                st.error(
-                    f"Analysis failed: {str(e)}"
-                )
-
-
-    st.divider()
-
-    section_title(
-        "📊 Explore the Research Dataset"
-    )
-
-    demo = load_demo_data()
-
-    if not demo.empty:
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-            metric_card(
-                "Comments",
-                format_number(
-                    len(demo)
-                ),
-            )
-
-        with c2:
-            metric_card(
-                "Creators",
-                format_number(
-                    demo["creator"].nunique()
-                )
-                if "creator" in demo.columns
-                else "0",
-            )
-
-        with c3:
-            metric_card(
-                "Videos",
-                format_number(
-                    demo["video_id"].nunique()
-                )
-                if "video_id" in demo.columns
-                else "0",
-            )
-
-        with c4:
-            metric_card(
-                "Domains",
-                format_number(
-                    demo["domain"].nunique()
-                )
-                if "domain" in demo.columns
-                else "0",
-            )
-
-
-# ============================================================
-# ANALYZE
-# ============================================================
-
-elif page == "🔎 Analyze":
-
-    st.markdown(
-        """<div class="hero">
-    <div class="badge">LIVE YOUTUBE ANALYSIS</div>
-            
-    <h1>Analyze Content</h1>
-    <p>
-        Analyze videos or channels using
-        real YouTube comments.
-    </p>
-</div>""",
-        unsafe_allow_html=True,
-    )
-
-    url = st.text_input(
-        "YouTube URL",
-        placeholder=(
-            "Video or channel URL"
-        ),
-        key="analysis_url",
-    )
-
-    comment_limit = st.slider(
-        "Maximum comments",
         100,
         5000,
         1000,
         100,
-        key="analysis_limit",
+        help="Maximum number of comments collected for this source.",
+        key="one_page_limit",
     )
+    run_label = "✨ Analyze Now"
+else:
+    if analysis_mode == "Compare creators":
+        st.info("Enter 2–5 creator/channel URLs, one per line. Each creator is analysed independently and then compared.")
+        placeholder = "https://www.youtube.com/@creator_one\nhttps://www.youtube.com/@creator_two\nhttps://www.youtube.com/@creator_three"
+    else:
+        st.info("Enter 2–5 video URLs, one per line. Each video is analysed independently and then compared.")
+        placeholder = "https://www.youtube.com/watch?v=VIDEO_ID_1\nhttps://www.youtube.com/watch?v=VIDEO_ID_2\nhttps://www.youtube.com/watch?v=VIDEO_ID_3"
 
-    if st.button(
-        "🚀 Start Analysis",
-        type="primary",
-        use_container_width=True,
-    ):
+    url_input = st.text_area(
+        "YouTube URLs — one URL per line",
+        placeholder=placeholder,
+        height=150,
+        key="comparison_urls",
+    )
+    comment_limit = st.slider(
+        "Comments per source",
+        100,
+        5000,
+        1000,
+        100,
+        help="Each creator/video gets its own comment budget. Total API usage grows with the number of sources.",
+        key="comparison_limit",
+    )
+    run_label = "⚖️ Analyze & Compare"
 
-        if not url.strip():
+if st.button(run_label, type="primary", use_container_width=True, key="one_page_analyze"):
+    # Clear the previous report BEFORE starting a new run.
+    # Otherwise an incomplete comparison can leave an old report on screen.
+    st.session_state.analysis_result = None
+    st.session_state.content_info = None
+    st.session_state.content_type = None
+    st.session_state.channel_videos = []
+    st.session_state.comparison_results = []
+    st.session_state.comparison_type = None
+    st.session_state.analysis_errors = []
 
-            st.warning(
-                "Enter a YouTube URL first."
-            )
-
+    try:
+        if analysis_mode == "Single source":
+            urls = parse_youtube_urls(url_input, minimum=1, maximum=1)
         else:
+            urls = parse_youtube_urls(url_input, minimum=2, maximum=5)
 
-            try:
+        # Comparison mode is intentionally ALL-OR-NOTHING:
+        # if one creator/video fails, do not show a misleading 1-of-3 or 2-of-3 report.
+        with st.status(
+            f"🔄 Processing {len(urls)} source(s)...",
+            expanded=True,
+        ) as status:
+            transformer = get_transformer()
+            results = []
+            errors = []
 
-                with st.status(
-                    "🔄 Processing YouTube content...",
-                    expanded=True,
-                ) as status:
+            for index, source_url in enumerate(urls):
+                st.write(
+                    f"**Source {index + 1}/{len(urls)}** — {source_url}"
+                )
 
-                    content_type, info, comments, videos = (
-                        analyze_youtube_url(
-                            url,
-                            comment_limit,
-                            st,
+                try:
+                    detected = identify_youtube_url(source_url)
+                    if not detected:
+                        raise ValueError(
+                            "YouTube URL could not be identified."
                         )
+
+                    detected_type = detected.get("type")
+
+                    if (
+                        analysis_mode == "Compare creators"
+                        and detected_type != "channel"
+                    ):
+                        raise ValueError(
+                            "This is not a channel URL. Use a channel URL "
+                            "such as /@handle or /channel/ID."
+                        )
+
+                    if (
+                        analysis_mode == "Compare videos"
+                        and detected_type != "video"
+                    ):
+                        raise ValueError(
+                            "This is not a video URL. Use a YouTube watch, "
+                            "shorts or youtu.be video URL."
+                        )
+
+                    st.write("🎬 Fetching metadata and comments...")
+
+                    result = analyze_source(
+                        source_url,
+                        comment_limit,
+                        transformer,
+                        st,
                     )
+
+                    # Keep result order identical to input order.
+                    results.append(result)
+
+                    title = (
+                        result.get("content_info", {}) or {}
+                    ).get("title", "Source")
 
                     st.write(
-                        f"📝 Processing {len(comments):,} comments..."
+                        f"✅ Completed: **{title}** — "
+                        f"{len(result['comments']):,} comments analysed."
                     )
 
-                    transformer = get_transformer()
-
+                except Exception as source_error:
+                    errors.append(
+                        (source_url, str(source_error))
+                    )
                     st.write(
-                        "🧠 Running VADER and Transformer sentiment analysis..."
+                        f"❌ Source {index + 1} failed: "
+                        f"{source_error}"
                     )
 
-                    result = run_complete_analysis(
-                        comments,
-                        transformer_classifier=transformer,
-                        use_transformer=True,
-                        use_sarcasm=False,
+            # SINGLE SOURCE: one failure means no report.
+            if analysis_mode == "Single source":
+                if errors or len(results) != 1:
+                    st.session_state.analysis_errors = errors
+                    status.update(
+                        label="❌ Analysis failed",
+                        state="error",
+                        expanded=True,
+                    )
+                    details = "\n".join(
+                        [f"• {url}: {err}" for url, err in errors]
+                    )
+                    raise RuntimeError(
+                        "The source could not be analysed.\n\n"
+                        + details
                     )
 
-                    st.session_state.analysis_result = (
-                        result
-                    )
+                result = results[0]
+                st.session_state.analysis_result = result
+                st.session_state.content_info = result["content_info"]
+                st.session_state.content_type = result["content_type"]
+                st.session_state.channel_videos = result["channel_videos"]
 
-                    st.session_state.content_info = (
-                        info
-                    )
-
-                    st.session_state.content_type = (
-                        content_type
-                    )
-
-                    st.session_state.channel_videos = (
-                        videos
-                    )
+            # COMPARISON: ALL sources must succeed.
+            else:
+                if errors or len(results) != len(urls):
+                    st.session_state.analysis_errors = errors
+                    st.session_state.comparison_results = []
+                    st.session_state.comparison_type = None
 
                     status.update(
-                        label="✅ Analysis complete",
-                        state="complete",
-                        expanded=False,
+                        label=(
+                            f"❌ Comparison stopped — "
+                            f"{len(results)}/{len(urls)} sources completed"
+                        ),
+                        state="error",
+                        expanded=True,
                     )
 
-                st.rerun()
+                    details = "\n".join(
+                        [
+                            f"• {url}: {err}"
+                            for url, err in errors
+                        ]
+                    )
 
-            except Exception as e:
+                    raise RuntimeError(
+                        f"Comparison was not created because "
+                        f"{len(errors)} source(s) failed. "
+                        f"All {len(urls)} sources must succeed.\n\n"
+                        + details
+                    )
 
-                st.error(
-                    f"Analysis failed: {str(e)}"
+                st.session_state.comparison_results = results
+                st.session_state.comparison_type = (
+                    "channel"
+                    if analysis_mode == "Compare creators"
+                    else "video"
                 )
 
+            status.update(
+                label=(
+                    f"✅ Analysis complete — "
+                    f"{len(results)}/{len(urls)} source(s) processed"
+                ),
+                state="complete",
+                expanded=False,
+            )
 
-# ============================================================
-# DISPLAY RESULTS
-# ============================================================
+    except Exception as e:
+        st.error(f"Analysis failed: {e}")
 
-if (
-    page in [
-        "🏠 Home",
-        "🔎 Analyze",
-    ]
-    and st.session_state.analysis_result
-    is not None
-):
+st.markdown('<div id="results" class="anchor-section"></div>', unsafe_allow_html=True)
+if st.session_state.analysis_errors:
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-kicker">Analysis issues</div>', unsafe_allow_html=True)
+    st.warning(
+        "The report was not displayed because one or more requested sources failed. "
+        "Fix the listed source(s) and run the comparison again."
+    )
+    for failed_url, error_text in st.session_state.analysis_errors:
+        st.error(f"{failed_url} — {error_text}")
 
-    st.divider()
-
+if st.session_state.comparison_results:
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-kicker">Comparison report</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Overall Comparison</div>', unsafe_allow_html=True)
+    show_comparison_results(st.session_state.comparison_results, st.session_state.comparison_type)
+elif st.session_state.analysis_result is not None:
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-kicker">Your analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Audience results</div>', unsafe_allow_html=True)
     show_analysis_results()
+else:
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-kicker">Results appear here</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Run an analysis to unlock the full report</div>', unsafe_allow_html=True)
+    st.info("Your sentiment breakdown, model comparison, keywords, engagement, comments and insights will appear in this section after you analyze a YouTube URL.")
 
+st.markdown('<div id="demo" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-kicker">Research dataset</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Demo Dataset</div>', unsafe_allow_html=True)
+st.write("Explore the 750-comment research dataset used for sentiment validation, keyword analysis, TF-IDF, engagement and model comparison.")
+show_demo_dashboard()
 
-# ============================================================
-# DEMO DATASET
-# ============================================================
+st.markdown('<div id="comment-analyzer" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-kicker">Single comment AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Comment Analyzer</div>', unsafe_allow_html=True)
+st.write("See the sentiment behind a comment and explore whether its tone may be sarcastic.")
 
-elif page == "📊 Demo Dataset":
-
-    show_demo_dashboard()
-
-
-# ============================================================
-# COMMENT ANALYZER
-# ============================================================
-
-elif page == "💬 Comment Analyzer":
-
-    st.markdown(
-        """<div class="hero">
-    <div class="badge">SINGLE COMMENT AI</div>
-
-    <h1>Comment Analyzer</h1>
-
-    <p>
-        See the sentiment behind a comment — and
-        explore whether its tone may be sarcastic.
-    </p>
-</div>""",
-        unsafe_allow_html=True,
-    )
-
-    comment = st.text_area(
-        "Enter a YouTube comment",
-        height=180,
-        placeholder=(
-            "Example: This video was absolutely amazing!"
-        ),
-    )
-
-    if st.button(
-        "🔍 Analyze Comment",
-        type="primary",
-    ):
-
-        if not comment.strip():
-
-            st.warning(
-                "Enter a comment first."
-            )
-
+comment=st.text_area("Enter a YouTube comment",height=150,placeholder="Example: This video was absolutely amazing!",key="one_page_comment")
+if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze"):
+    if not comment.strip():
+        st.warning("Enter a comment first.")
+    else:
+        result=get_vader_sentiment(comment)
+        sarcasm_detector=get_sarcasm_detector()
+        sarcasm_result=detect_sarcasm(comment,detector=sarcasm_detector)
+        sentiment=result["sentiment"]
+        st.subheader(f"Detected sentiment: {sentiment.title()}")
+        c1,c2,c3,c4=st.columns(4)
+        with c1: metric_card("Positive",f"{result['positive_score']:.2%}")
+        with c2: metric_card("Neutral",f"{result['neutral_score']:.2%}")
+        with c3: metric_card("Negative",f"{result['negative_score']:.2%}")
+        with c4: metric_card("Compound",f"{result['compound_score']:.3f}")
+        st.markdown('<div class="section-title">🎭 Tone & sarcasm</div>',unsafe_allow_html=True)
+        if sarcasm_result["sarcasm_label"]=="unavailable":
+            st.warning("Sarcasm detector is unavailable, but sentiment analysis worked normally.")
         else:
-
-            result = get_vader_sentiment(
-                comment
-            )
-
-            sentiment = result[
-                "sentiment"
-            ]
-
-            st.subheader(
-                f"Detected sentiment: {sentiment.title()}"
-            )
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            with c1:
-                metric_card(
-                    "Positive",
-                    f"{result['positive_score']:.2%}",
-                )
-
-            with c2:
-                metric_card(
-                    "Neutral",
-                    f"{result['neutral_score']:.2%}",
-                )
-
-            with c3:
-                metric_card(
-                    "Negative",
-                    f"{result['negative_score']:.2%}",
-                )
-
-            with c4:
-                metric_card(
-                    "Compound",
-                    f"{result['compound_score']:.3f}",
-                )
-
-            # --------------------------------------------------------
-            # SARCASM LENS
-            # --------------------------------------------------------
-
-            st.divider()
-
-            sarcasm_detector = get_sarcasm_detector()
-            sarcasm_result = detect_sarcasm(
-                comment,
-                detector=sarcasm_detector,
-            )
-
-            st.subheader("🎭 Sarcasm Lens")
-            st.caption(
-                "A separate AI check for possible sarcasm. Sarcasm is context-dependent, so treat this as an interpretation rather than a certainty."
-            )
-
-            if sarcasm_result["sarcasm_label"] == "unavailable":
-                st.warning(
-                    "The sarcasm detector is unavailable right now. Sentiment analysis still worked normally."
-                )
+            s1,s2=st.columns(2)
+            with s1: metric_card("Potential Sarcasm","Yes" if sarcasm_result["is_sarcastic"] else "No")
+            with s2: metric_card("Detector Confidence",f"{sarcasm_result['sarcasm_score']:.1%}")
+            if sarcasm_result["is_sarcastic"]:
+                st.warning("This comment may be sarcastic. Sarcasm detection is a model prediction, not a certainty.")
             else:
-                is_sarcastic = sarcasm_result["is_sarcastic"]
-                confidence = sarcasm_result["sarcasm_score"]
+                st.success("The sarcasm detector did not identify this comment as sarcastic.")
+        if sentiment=="positive":
+            context="The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
+        elif sentiment=="negative":
+            context="The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
+        else:
+            context="The language is relatively neutral, with limited positive or negative emotional intensity."
+        st.markdown(f'<div class="insight-card"><strong>💡 Context</strong><br>{context}</div>',unsafe_allow_html=True)
 
-                s1, s2, s3 = st.columns(3)
+st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+st.markdown('<div class="section-kicker">About the project</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">YouTube Pulse</div>', unsafe_allow_html=True)
+st.write("An interactive YouTube audience sentiment intelligence platform for exploring sentiment, engagement, language, topics and model behaviour.")
+c1,c2=st.columns(2)
+with c1:
+    st.subheader("🎯 Analysis Features")
+    st.markdown("""
+    - Video sentiment analysis
+    - Channel sentiment analysis
+    - VADER sentiment
+    - Transformer sentiment
+    - Keyword extraction
+    - TF-IDF analysis
+    - Engagement analysis
+    - Comment exploration
+    - Automatic insights
+    - Single-comment sarcasm detection
+    - Video-level channel comparison
+    """)
+with c2:
+    st.subheader("🧠 NLP Models")
+    st.markdown("""
+    **VADER**
 
-                with s1:
-                    metric_card(
-                        "Sarcasm",
-                        "Potentially yes" if is_sarcastic else "Not detected",
-                    )
+    A lexicon and rule-based sentiment analysis approach.
 
-                with s2:
-                    metric_card(
-                        "Confidence",
-                        f"{confidence:.1%}",
-                    )
+    **Transformer**
 
-                with s3:
-                    metric_card(
-                        "Tone",
-                        sentiment.title(),
-                    )
+    CardiffNLP's Twitter-RoBERTa sentiment model provides contextual sentiment predictions.
 
-                explanation = explain_sarcasm_context(
-                    comment,
-                    sentiment,
-                    is_sarcastic,
-                )
+    The application compares the predictions produced by both models.
+    """)
 
-                if is_sarcastic:
-                    st.markdown(
-                        f"""
-                        <div class="insight-card">
-                            <div class="insight-title">🎭 What might be happening?</div>
-                            <div class="insight-body">
-                                <strong>{explanation['context']}</strong><br>
-                                {explanation['why']}<br><br>
-                                <strong>How to read it:</strong> {explanation['meaning']}
-                            </div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                    st.info(
-                        "💡 Think of sarcasm as a second layer of meaning: the sentiment model reads the words, while the sarcasm detector asks whether the commenter may mean something different from the literal wording."
-                    )
-                else:
-                    st.success(
-                        "No potential sarcasm was detected. The comment's sentiment appears relatively straightforward from the available text."
-                    )
-
-            st.divider()
-            st.subheader("🎭 Sarcasm Detection")
-
-            if sarcasm_result["sarcasm_label"] == "unavailable":
-                st.warning("Sarcasm detector is unavailable, but sentiment analysis worked normally.")
-            else:
-                s1, s2 = st.columns(2)
-                with s1:
-                    metric_card(
-                        "Potential Sarcasm",
-                        "Yes" if sarcasm_result["is_sarcastic"] else "No",
-                    )
-                with s2:
-                    metric_card(
-                        "Detector Confidence",
-                        f"{sarcasm_result['sarcasm_score']:.1%}",
-                    )
-                if sarcasm_result["is_sarcastic"]:
-                    st.warning(
-                        "This comment is potentially sarcastic. The result is a model prediction, not a certainty."
-                    )
-                else:
-                    st.success(
-                        "The sarcasm detector did not identify this comment as sarcastic."
-                    )
-
-
-# ============================================================
-# ABOUT
-# ============================================================
-
-elif page == "ℹ️ About":
-
-    st.markdown(
-        """
-        <div class="hero">
-            <div class="badge">
-                ABOUT THE PROJECT
-            </div>
-
-            <h1>
-                YouTube Pulse
-            </h1>
-
-            <p>
-                An interactive YouTube audience
-                sentiment intelligence platform.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    section_title(
-        "What does YouTube Pulse do?"
-    )
-
-    st.write(
-        """
-        YouTube Pulse analyses YouTube comments to
-        understand audience sentiment, engagement,
-        language and discussion topics.
-        """
-    )
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-
-        st.subheader(
-            "🎯 Analysis Features"
-        )
-
-        st.markdown(
-            """
-            - Video sentiment analysis
-            - Channel sentiment analysis
-            - VADER sentiment
-            - Transformer sentiment
-            - Keyword extraction
-            - TF-IDF analysis
-            - Engagement analysis
-            - Comment exploration
-            - Automatic insights
-            - Sarcasm detection
-            - Sarcasm vs sentiment analysis
-            - Video-level channel comparison
-            """
-        )
-
-    with c2:
-
-        st.subheader(
-            "🧠 NLP Models"
-        )
-
-        st.markdown(
-            """
-            **VADER**
-
-            A lexicon and rule-based sentiment
-            analysis approach.
-
-            **Transformer**
-
-            CardiffNLP's Twitter-RoBERTa sentiment
-            model is used to provide contextual
-            sentiment predictions.
-
-            The application also compares the
-            predictions produced by both models.
-            """
-        )
-
-    st.divider()
-
-    st.subheader(
-        "📊 Research Dataset"
-    )
-
-    st.write(
-        """
-        The project also contains a 750-comment
-        research dataset used for keyword analysis,
-        TF-IDF, sentiment analysis, model validation,
-        model comparison and error analysis.
-        """
-    )
+st.markdown('<div class="footer-note">YouTube Pulse • One-page audience intelligence dashboard</div>',unsafe_allow_html=True)

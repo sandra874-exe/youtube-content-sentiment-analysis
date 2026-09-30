@@ -68,89 +68,111 @@ def _ensure_dataframe(data: Any) -> pd.DataFrame:
 # VADER
 # ============================================================
 
-def get_vader_sentiment(text: Any) -> dict:
-    """
-    Return VADER sentiment and all sentiment scores.
-    """
+def get_vader_sentiment(text: Any) -> str:
+    """Return positive, neutral, or negative using VADER."""
+    score = _VADER.polarity_scores(str(text) if not pd.isna(text) else "")["compound"]
+    if score >= 0.05:
+        return "positive"
+    if score <= -0.05:
+        return "negative"
+    return "neutral"
 
-    if pd.isna(text):
-        text = ""
-
-    text = str(text)
-
-    scores = _VADER.polarity_scores(text)
-
-    compound = scores["compound"]
-
-    if compound >= 0.05:
-        sentiment = "positive"
-    elif compound <= -0.05:
-        sentiment = "negative"
-    else:
-        sentiment = "neutral"
-
-    return {
-        "sentiment": sentiment,
-        "positive_score": scores["pos"],
-        "neutral_score": scores["neu"],
-        "negative_score": scores["neg"],
-        "compound_score": compound,
-    }
 
 def analyze_vader(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """
-    Run VADER on every comment and store sentiment + scores.
-    """
-
     df = _ensure_dataframe(dataframe)
-
     if df.empty:
         df["vader_sentiment"] = pd.Series(dtype="object")
-        df["vader_positive"] = pd.Series(dtype="float")
-        df["vader_neutral"] = pd.Series(dtype="float")
-        df["vader_negative"] = pd.Series(dtype="float")
-        df["vader_compound"] = pd.Series(dtype="float")
         return df
-
-    results = df["clean_text"].map(get_vader_sentiment)
-
-    df["vader_sentiment"] = results.map(
-        lambda x: x["sentiment"]
-    )
-
-    df["vader_positive"] = results.map(
-        lambda x: x["positive_score"]
-    )
-
-    df["vader_neutral"] = results.map(
-        lambda x: x["neutral_score"]
-    )
-
-    df["vader_negative"] = results.map(
-        lambda x: x["negative_score"]
-    )
-
-    df["vader_compound"] = results.map(
-        lambda x: x["compound_score"]
-    )
-
+    df["vader_sentiment"] = df["clean_text"].map(get_vader_sentiment)
     return df
+
 
 # ============================================================
 # TRANSFORMER
 # ============================================================
 
 def load_transformer(model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"):
-    """Load the transformer pipeline. Returns None if unavailable."""
-    try:
-        from transformers import pipeline
+    """
+    Load the CardiffNLP RoBERTa sentiment model with an explicit tokenizer.
 
-        return pipeline(
-            "sentiment-analysis",
-            model=model_name,
-            tokenizer=model_name,
-            truncation=True,
-        )
+    We intentionally avoid relying on the Transformers pipeline to perform
+    truncation because some pipeline/tokenizer combinations can still pass
+    an over-limit sequence to the model. The CardiffNLP model declares
+    max_position_embeddings=514, so we cap inputs at 510 tokens to leave
+    a safety margin for special tokens.
+    """
+    try:
+        import torch
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSequenceClassification.from_pretrained(model_name)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
+        model.eval()
+
+        # Keep the tokenizer itself bounded as an additional safety guard.
+        tokenizer.model_max_length = 510
+
+        def classifier(
+            texts,
+            batch_size: int = 32,
+            truncation: bool = True,
+            max_length: int = 510,
+            **kwargs,
+        ):
+            single_input = isinstance(texts, str)
+
+            if single_input:
+                texts = [texts]
+
+            texts = ["" if text is None else str(text) for text in texts]
+
+            outputs = []
+
+            for start_index in range(0, len(texts), batch_size):
+                batch = texts[start_index:start_index + batch_size]
+
+                encoded = tokenizer(
+                    batch,
+                    padding=True,
+                    truncation=True,
+                    max_length=510,
+                    return_tensors="pt",
+                )
+
+                encoded = {
+                    key: value.to(device)
+                    for key, value in encoded.items()
+                }
+
+                with torch.no_grad():
+                    logits = model(**encoded).logits
+                    probabilities = torch.softmax(logits, dim=-1)
+
+                for probability in probabilities:
+                    score, class_id = torch.max(probability, dim=-1)
+
+                    class_id = int(class_id.item())
+                    score = float(score.item())
+
+                    label = model.config.id2label.get(
+                        class_id,
+                        str(class_id),
+                    )
+
+                    outputs.append(
+                        {
+                            "label": label,
+                            "score": score,
+                        }
+                    )
+
+            return outputs[0] if single_input else outputs
+
+        return classifier
+
     except Exception:
         return None
 
@@ -176,6 +198,14 @@ def analyze_transformer(
     classifier=None,
     batch_size: int = 32,
 ) -> pd.DataFrame:
+    """
+    Run Transformer sentiment analysis safely.
+
+    Long YouTube comments are explicitly truncated to 510 tokens so they
+    cannot exceed the RoBERTa model input limit. If a batch still fails,
+    each comment in that batch is retried individually so one problematic
+    comment cannot abort the entire creator/video analysis.
+    """
     df = _ensure_dataframe(dataframe)
 
     if df.empty:
@@ -191,25 +221,99 @@ def analyze_transformer(
         df["transformer_score"] = np.nan
         return df
 
-    texts = df["clean_text"].fillna("").tolist()
-    labels: List[str] = []
+    texts = df["clean_text"].fillna("").astype(str).tolist()
+
+    labels: List[Any] = []
     scores: List[float] = []
 
-    for start in range(0, len(texts), batch_size):
-        batch = texts[start : start + batch_size]
+    def classify_one(text: str):
+        """Classify one comment with a hard tokenizer limit."""
         try:
-            outputs = classifier(batch, batch_size=batch_size, truncation=True)
-        except TypeError:
-            outputs = classifier(batch)
+            output = classifier(
+                text,
+                truncation=True,
+                max_length=510,
+            )
 
-        for output in outputs:
             if isinstance(output, list):
-                output = max(output, key=lambda x: x.get("score", 0))
-            labels.append(_normalise_transformer_label(output.get("label", "neutral")))
-            scores.append(float(output.get("score", 0.0)))
+                if not output:
+                    return "neutral", 0.0
+                if isinstance(output[0], list):
+                    output = output[0]
+                output = max(
+                    output,
+                    key=lambda item: float(item.get("score", 0.0)),
+                )
+
+            if not isinstance(output, dict):
+                return "neutral", 0.0
+
+            return (
+                _normalise_transformer_label(
+                    output.get("label", "neutral")
+                ),
+                float(output.get("score", 0.0)),
+            )
+
+        except Exception:
+            return np.nan, np.nan
+
+    for start_index in range(0, len(texts), batch_size):
+        batch = texts[start_index:start_index + batch_size]
+
+        try:
+            outputs = classifier(
+                batch,
+                batch_size=batch_size,
+                truncation=True,
+                max_length=510,
+            )
+
+            if not isinstance(outputs, list) or len(outputs) != len(batch):
+                raise ValueError("Transformer returned an unexpected batch size.")
+
+            for output in outputs:
+                if isinstance(output, list):
+                    if not output:
+                        labels.append("neutral")
+                        scores.append(0.0)
+                        continue
+
+                    output = max(
+                        output,
+                        key=lambda item: float(item.get("score", 0.0)),
+                    )
+
+                labels.append(
+                    _normalise_transformer_label(
+                        output.get("label", "neutral")
+                    )
+                )
+                scores.append(float(output.get("score", 0.0)))
+
+        except Exception:
+            # Retry this batch one comment at a time.
+            # This prevents one unusually long/problematic comment from
+            # cancelling the entire source analysis.
+            for text in batch:
+                label, score = classify_one(text)
+                labels.append(label)
+                scores.append(score)
+
+    # Safety check: never allow a transformer failure to change the number
+    # of rows in the source dataset.
+    if len(labels) != len(df):
+        labels = []
+        scores = []
+
+        for text in texts:
+            label, score = classify_one(text)
+            labels.append(label)
+            scores.append(score)
 
     df["transformer_sentiment"] = labels
     df["transformer_score"] = scores
+
     return df
 
 
