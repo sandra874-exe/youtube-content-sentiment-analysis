@@ -20,3 +20,5 @@ Thumbs.db
 # ZIP/archive files
 *.zip
 
+# VS Code
+.vscode/
