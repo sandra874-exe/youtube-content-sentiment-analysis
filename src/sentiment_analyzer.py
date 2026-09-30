@@ -150,6 +150,7 @@ def load_transformer(model_name: str = "cardiffnlp/twitter-roberta-base-sentimen
             model=model_name,
             tokenizer=model_name,
             truncation=True,
+            max_length=512,
         )
     except Exception:
         return None
@@ -198,7 +199,12 @@ def analyze_transformer(
     for start in range(0, len(texts), batch_size):
         batch = texts[start : start + batch_size]
         try:
-            outputs = classifier(batch, batch_size=batch_size, truncation=True)
+            outputs = classifier(
+            batch,
+            batch_size=batch_size,
+            truncation=True,
+            max_length=512,
+        )
         except TypeError:
             outputs = classifier(batch)
 
