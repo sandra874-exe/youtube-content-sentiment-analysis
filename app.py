@@ -1,5 +1,6 @@
 from pathlib import Path
 import math
+import re
 
 import streamlit as st
 import pandas as pd
@@ -24,13 +25,15 @@ from src.sentiment_analyzer import (
 
 from src.creator_comparison import compare_creators
 
+
+
 # ============================================================
 # PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
     page_title="YouTube Pulse",
-    page_icon="🎬",
+    page_icon="YT",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -248,6 +251,53 @@ st.markdown(
         min-height: 115px;
     }
 
+    .metric-header {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        margin-bottom: .15rem;
+    }
+
+    .metric-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #F7F4EF;
+        flex: 0 0 38px;
+    }
+
+    .metric-icon svg,
+    .section-title-icon svg,
+    .insight-icon svg {
+        display: block;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+    }
+
+    .section-title-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #FFF0EC;
+        flex: 0 0 32px;
+    }
+
+    .insight-icon {
+        display: inline-flex;
+        vertical-align: middle;
+        margin-right: .45rem;
+    }
+
     .metric-label {
         color: #596579 !important;
         font-family: 'Space Grotesk', sans-serif;
@@ -399,6 +449,88 @@ if "comparison_result" not in st.session_state:
 # HELPERS
 # ============================================================
 
+# ------------------------------------------------------------
+# SVG ICON SYSTEM
+# ------------------------------------------------------------
+
+def svg_icon(name, size=22, color="currentColor"):
+    icons = {
+        "positive": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 14C9 15.2 10.3 16 12 16C13.7 16 15 15.2 16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>''',
+        "neutral": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8.5 15H15.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>''',
+        "negative": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 16C9 14.8 10.3 14 12 14C13.7 14 15 14.8 16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>''',
+        "eye": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M2.5 12C4.8 8.5 8 6.5 12 6.5C16 6.5 19.2 8.5 21.5 12C19.2 15.5 16 17.5 12 17.5C8 17.5 4.8 15.5 2.5 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>''',
+        "like": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M7 10V20H4C3.45 20 3 19.55 3 19V11C3 10.45 3.45 10 4 10H7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7 20H17.2C18.5 20 19.5 19.1 19.7 17.8L20.6 12.2C20.8 11 19.9 10 18.7 10H14L15 6.8C15.2 5.3 14.1 4 12.6 4C12 4 11.5 4.3 11.2 4.8L7 10V20Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>''',
+        "comment": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M20 11.5C20 16.2 16.4 20 12 20C10.5 20 9.1 19.6 7.9 18.9L4 20L5.1 16.4C4.4 15.1 4 13.6 4 12C4 7.3 7.6 4 12 4C16.4 4 20 7.3 20 11.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>''',
+        "users": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="2"/><path d="M3.5 19C3.8 15.7 5.7 14 9 14C12.3 14 14.2 15.7 14.5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M15 5.5C17.2 5.8 18.5 7.1 18.5 9C18.5 10.7 17.5 12 16 12.5M17 15C19.2 15.5 20.3 16.8 20.5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>''',
+        "video": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><rect x="3" y="6" width="13" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M16 10L21 7.5V16.5L16 14V10Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>''',
+        "heart": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M20.8 8.8C20.8 13.5 12 19 12 19C12 19 3.2 13.5 3.2 8.8C3.2 6.2 5.1 4.5 7.4 4.5C9.2 4.5 10.7 5.5 12 7C13.3 5.5 14.8 4.5 16.6 4.5C18.9 4.5 20.8 6.2 20.8 8.8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>''',
+        "chart": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M4 19V5M4 19H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 15L10 11L13 13L18 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>''',
+        "lightbulb": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M9 18H15M9.5 21H14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.5 14.5C7.3 13.5 6.5 11.9 6.5 10C6.5 6.9 8.9 4.5 12 4.5C15.1 4.5 17.5 6.9 17.5 10C17.5 11.9 16.7 13.5 15.5 14.5C14.7 15.2 14.5 16 14.5 17H9.5C9.5 16 9.3 15.2 8.5 14.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>''',
+        "brain": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M9.5 4.5C8 3.2 5.5 4.1 5.5 6.2C3.6 6.5 3 8.8 4.2 10.1C2.9 11.8 4 14.1 5.8 14.3C5.2 16.3 6.9 18 8.7 17.7C9.1 19.8 11.7 20.2 12 18V6C11.8 4.7 10.8 4.2 9.5 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14.5 4.5C16 3.2 18.5 4.1 18.5 6.2C20.4 6.5 21 8.8 19.8 10.1C21.1 11.8 20 14.1 18.2 14.3C18.8 16.3 17.1 18 15.3 17.7C14.9 19.8 12.3 20.2 12 18V6C12.2 4.7 13.2 4.2 14.5 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>''',
+        "search": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="2"/><path d="M16 16L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>''',
+        "download": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M12 3V15M7 11L12 16L17 11M4 20H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>''',
+        "shield": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M12 3L20 6V11C20 16 16.8 19.5 12 21C7.2 19.5 4 16 4 11V6L12 3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>''',
+        "sparkles": f'''<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color:{color};"><path d="M12 3L13.2 7.8L18 9L13.2 10.2L12 15L10.8 10.2L6 9L10.8 7.8L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M19 14L19.6 16.4L22 17L19.6 17.6L19 20L18.4 17.6L16 17L18.4 16.4L19 14Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>''',
+    }
+    return icons.get(name, "")
+
+
+METRIC_ICON_MAP = {
+    "views": "eye",
+    "channel views": "eye",
+    "likes": "like",
+    "average likes": "heart",
+    "avg likes": "heart",
+    "comments": "comment",
+    "comments available": "comment",
+    "comments analysed": "brain",
+    "analysed comments": "brain",
+    "comments checked": "comment",
+    "subscribers": "users",
+    "creators": "users",
+    "videos": "video",
+    "domains": "chart",
+    "positive": "positive",
+    "neutral": "neutral",
+    "negative": "negative",
+    "avg. positive %": "positive",
+    "avg. negative %": "negative",
+    "sources compared": "users",
+    "compound": "chart",
+}
+
+
+SECTION_ICON_MAP = {
+    "comparison overview": "chart",
+    "audience mood": "chart",
+    "what the audience is saying": "lightbulb",
+    "topics & language": "search",
+    "comment explorer": "comment",
+    "vader vs transformer": "brain",
+    "channel video breakdown": "video",
+    "dataset insights": "lightbulb",
+    "overall dataset sentiment": "chart",
+    "video-level sentiment": "video",
+    "distinctive audience vocabulary": "search",
+}
+
+
+def _clean_label(text):
+    text = str(text)
+    text = re.sub(r"^[^\w]+", "", text, flags=re.UNICODE)
+    return text.strip()
+
+
+def _find_icon(label, mapping, default="chart"):
+    clean = _clean_label(label).lower()
+    if clean in mapping:
+        return mapping[clean]
+    for key, icon in mapping.items():
+        if key in clean:
+            return icon
+    return default
+
+
 def format_number(value):
 
     if value is None:
@@ -421,13 +553,31 @@ def format_number(value):
     return f"{int(value):,}"
 
 
-def metric_card(label, value):
+def metric_card(label, value, icon=None, icon_color=None):
+
+    icon = icon or _find_icon(label, METRIC_ICON_MAP)
+
+    if icon_color is None:
+        clean = _clean_label(label).lower()
+        if "positive" in clean:
+            icon_color = SENTIMENT_COLORS["positive"]
+        elif "negative" in clean:
+            icon_color = SENTIMENT_COLORS["negative"]
+        elif "neutral" in clean:
+            icon_color = SENTIMENT_COLORS["neutral"]
+        else:
+            icon_color = "#D95F43"
+
+    clean_label = _clean_label(label)
 
     st.markdown(
         f"""
         <div class="metric-card">
-            <div class="metric-label">
-                {label}
+            <div class="metric-header">
+                <div class="metric-icon">
+                    {svg_icon(icon, size=21, color=icon_color)}
+                </div>
+                <div class="metric-label">{clean_label}</div>
             </div>
             <div class="metric-value">
                 {value}
@@ -438,12 +588,18 @@ def metric_card(label, value):
     )
 
 
-def section_title(title):
+def section_title(title, icon=None):
+
+    icon = icon or _find_icon(title, SECTION_ICON_MAP)
+    clean_title = _clean_label(title)
 
     st.markdown(
         f"""
         <div class="section-title">
-            {title}
+            <span class="section-title-icon">
+                {svg_icon(icon, size=18, color="#D95F43")}
+            </span>
+            <span>{clean_title}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -587,6 +743,8 @@ def get_transformer():
     return load_transformer()
 
 
+
+
 # ============================================================
 # YOUTUBE ANALYSIS
 # ============================================================
@@ -630,8 +788,10 @@ def analyze_youtube_url(
     if content_type == "video":
 
         if progress:
-            progress.write(
-                "🎬 Getting video information..."
+            progress.update(
+                label="🎬 Fetching video information...",
+                state="running",
+                expanded=False,
             )
 
         info = get_video_info(
@@ -644,9 +804,10 @@ def analyze_youtube_url(
             )
 
         if progress:
-            progress.write(
-                f"💬 Collecting up to "
-                f"{comment_limit:,} comments..."
+            progress.update(
+                label=f"💬 Collecting up to {comment_limit:,} comments...",
+                state="running",
+                expanded=False,
             )
 
         comments = get_video_comments(
@@ -661,8 +822,10 @@ def analyze_youtube_url(
             )
 
         if progress:
-            progress.write(
-                f"📝 {len(comments):,} comments collected."
+            progress.update(
+                label=f"📝 {len(comments):,} comments collected · Ready for analysis",
+                state="running",
+                expanded=False,
             )
 
         return (
@@ -677,8 +840,10 @@ def analyze_youtube_url(
     # --------------------------------------------------------
 
     if progress:
-        progress.write(
-            "📺 Getting channel information..."
+        progress.update(
+            label="📺 Fetching channel information...",
+            state="running",
+            expanded=False,
         )
 
     channel_info = get_channel_info(
@@ -691,8 +856,10 @@ def analyze_youtube_url(
         )
 
     if progress:
-        progress.write(
-            "🎥 Finding recent channel videos..."
+        progress.update(
+            label="🎥 Finding recent videos...",
+            state="running",
+            expanded=False,
         )
 
     videos = get_channel_videos(
@@ -730,9 +897,10 @@ def analyze_youtube_url(
         )
 
         if progress:
-            progress.write(
-                f"🎥 Video {index + 1}/{len(videos)}: "
-                f"{video_title[:70]}"
+            progress.update(
+                label=f"🎥 Collecting comments · Video {index + 1}/{len(videos)}",
+                state="running",
+                expanded=False,
             )
 
         remaining = (
@@ -773,8 +941,10 @@ def analyze_youtube_url(
         )
 
     if progress:
-        progress.write(
-            f"💬 {len(comments):,} channel comments collected."
+        progress.update(
+            label=f"💬 {len(comments):,} channel comments collected · Ready for analysis",
+            state="running",
+            expanded=False,
         )
 
     return (
@@ -783,6 +953,191 @@ def analyze_youtube_url(
         comments,
         videos,
     )
+
+# ============================================================
+# MULTI-URL ANALYSIS / COMPARISON
+# ============================================================
+
+def parse_youtube_urls(raw_text, minimum=1, maximum=5):
+    """Parse and validate a batch of YouTube URLs without silently dropping entries."""
+    text = (raw_text or "").strip()
+
+    if not text:
+        raise ValueError(f"Please enter at least {minimum} YouTube URL(s).")
+
+    # Accept one URL per line, comma-separated URLs, or pasted URLs with bullets.
+    candidates = re.findall(
+        r"https?://(?:www\.)?(?:youtube\.com|youtu\.be)/[^\s,]+",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not candidates:
+        candidates = [line.strip().strip("-•,") for line in text.splitlines() if line.strip()]
+
+    urls = []
+    for raw_url in candidates:
+        url = raw_url.strip().strip("\"'(),[]{}<>.,")
+        if url and url not in urls:
+            urls.append(url)
+
+    if len(urls) < minimum:
+        raise ValueError(
+            f"Only {len(urls)} YouTube URL(s) were detected. "
+            f"Please enter exactly {minimum if minimum == maximum else f'{minimum}–{maximum}'} valid URL(s)."
+        )
+
+    if len(urls) > maximum:
+        raise ValueError(f"Please enter no more than {maximum} YouTube URLs at a time.")
+
+    return urls
+
+
+def analyze_source(url, comment_limit, transformer, progress=None):
+    content_type, info, comments, videos = analyze_youtube_url(
+        url,
+        comment_limit,
+        progress,
+    )
+
+    # Main sentiment pipeline: NO sarcasm arguments here.
+    result = run_complete_analysis(
+        comments,
+        transformer_classifier=transformer,
+        use_transformer=True,
+    )
+
+    result["source_url"] = url
+    result["content_type"] = content_type
+    result["content_info"] = info
+    result["channel_videos"] = videos
+    return result
+
+
+def build_comparison_row(result, index):
+    info = result.get("content_info", {}) or {}
+    comments = result.get("comments", pd.DataFrame())
+    summary = result.get("summary", pd.DataFrame())
+
+    if result.get("content_type") == "video":
+        title = info.get("title", "YouTube Video")
+    else:
+        title = info.get("title", info.get("channel_title", "YouTube Channel"))
+
+    def pct(sentiment):
+        if summary is None or summary.empty or "sentiment" not in summary.columns:
+            return 0.0
+        row = summary[summary["sentiment"] == sentiment]
+        return float(row.iloc[0]["percentage"]) if not row.empty else 0.0
+
+    stats = result.get("statistics", {}) or {}
+    return {
+        "Source": f"{index + 1}. {title or 'Source'}",
+        "Type": str(result.get("content_type", "")).title(),
+        "Comments Analysed": len(comments),
+        "Positive %": round(pct("positive"), 1),
+        "Neutral %": round(pct("neutral"), 1),
+        "Negative %": round(pct("negative"), 1),
+        "Average Likes": round(float(stats.get("average_likes", 0) or 0), 1),
+        "URL": result.get("source_url", ""),
+    }
+
+
+def show_comparison_results(results, comparison_type):
+    if not results:
+        return
+
+    section_title("⚖️ Comparison Overview")
+    st.write(
+        "Each source is analysed independently, then compared side-by-side. "
+        "Sentiment percentages are calculated from the comments collected for that source."
+    )
+
+    rows = [build_comparison_row(r, i) for i, r in enumerate(results)]
+    comparison_df = pd.DataFrame(rows)
+
+    total_comments = int(comparison_df["Comments Analysed"].sum())
+    avg_positive = float(comparison_df["Positive %"].mean())
+    avg_negative = float(comparison_df["Negative %"].mean())
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        metric_card("Sources Compared", len(results))
+    with c2:
+        metric_card("Comments Analysed", format_number(total_comments))
+    with c3:
+        metric_card("Avg. Positive %", f"{avg_positive:.1f}%")
+    with c4:
+        metric_card("Avg. Negative %", f"{avg_negative:.1f}%")
+
+    chart_df = comparison_df.melt(
+        id_vars=["Source"],
+        value_vars=["Positive %", "Neutral %", "Negative %"],
+        var_name="Sentiment",
+        value_name="Percentage",
+    )
+    chart_df["Sentiment"] = chart_df["Sentiment"].str.replace(" %", "", regex=False)
+
+    fig = px.bar(
+        chart_df,
+        x="Source",
+        y="Percentage",
+        color="Sentiment",
+        barmode="group",
+        text="Percentage",
+        color_discrete_map={
+            "Positive": SENTIMENT_COLORS["positive"],
+            "Neutral": SENTIMENT_COLORS["neutral"],
+            "Negative": SENTIMENT_COLORS["negative"],
+        },
+        title=("Creator" if comparison_type == "channel" else "Video") + " Sentiment Comparison",
+    )
+    fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig.update_layout(
+        yaxis_title="Percentage of analysed comments",
+        xaxis_title="",
+        height=500,
+        legend_title="Sentiment",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("Side-by-side results")
+    st.dataframe(
+        comparison_df.drop(columns=["URL"]),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    engagement_df = comparison_df[["Source", "Average Likes"]].copy()
+    fig2 = px.bar(
+        engagement_df,
+        x="Source",
+        y="Average Likes",
+        text="Average Likes",
+        title="Average Comment Likes by Source",
+    )
+    fig2.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+    fig2.update_layout(height=420, xaxis_title="", yaxis_title="Average likes")
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Individual source reports")
+    tab_labels = []
+    for i, result in enumerate(results):
+        label = build_comparison_row(result, i)["Source"]
+        tab_labels.append(label[:40])
+
+    tabs = st.tabs(tab_labels)
+    for idx, (tab, result) in enumerate(zip(tabs, results)):
+        with tab:
+            info = result.get("content_info", {}) or {}
+            content_type = result.get("content_type")
+            show_overview(result, info, content_type)
+            if content_type == "channel":
+                show_channel_breakdown(result, result.get("channel_videos", []))
+            show_topics(result, key_suffix=f"_comparison_{idx}")
+            show_engagement(result)
+            show_comments(result, key_suffix=f"_comparison_{idx}")
+            show_models(result)
 
 
 
@@ -927,10 +1282,7 @@ def show_creator_comparison(result):
         )
         comparison_engagement_chart(metrics, metric)
 
-    st.markdown(
-        '<div class="section-title">📹 Video-level sentiment</div>',
-        unsafe_allow_html=True,
-    )
+    section_title("Video-level sentiment", "video")
 
     if not video_sentiment.empty:
         video_display = video_sentiment[
@@ -960,10 +1312,7 @@ def show_creator_comparison(result):
             height=420,
         )
 
-    st.markdown(
-        '<div class="section-title">🔑 Distinctive audience vocabulary</div>',
-        unsafe_allow_html=True,
-    )
+    section_title("Distinctive audience vocabulary", "search")
 
     if not keywords.empty:
         keyword_display = keywords.pivot(
@@ -983,6 +1332,8 @@ def show_creator_comparison(result):
         "of videos and comments per video, so raw counts should be interpreted alongside "
         "percentages and engagement statistics."
     )
+
+
 
 # ============================================================
 # ANALYSIS DISPLAY
@@ -1202,7 +1553,7 @@ def show_overview(
         st.markdown(
             f"""
             <div class="insight-card">
-                💡 {insight}
+                <span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span>{insight}
             </div>
             """,
             unsafe_allow_html=True,
@@ -1213,7 +1564,7 @@ def show_overview(
 # TOPICS / KEYWORDS
 # ============================================================
 
-def show_topics(result):
+def show_topics(result, key_suffix=""):
 
     section_title(
         "🔑 Topics & Language"
@@ -1228,7 +1579,7 @@ def show_topics(result):
             "negative",
         ],
         format_func=lambda x: x.title(),
-        key="keyword_sentiment",
+        key=f"keyword_sentiment{key_suffix}",
     )
 
     keywords = result[
@@ -1596,7 +1947,7 @@ def show_engagement(result):
 # COMMENTS
 # ============================================================
 
-def show_comments(result):
+def show_comments(result, key_suffix=""):
 
     section_title(
         "💬 Comment Explorer"
@@ -1624,10 +1975,12 @@ def show_comments(result):
             "neutral",
             "negative",
         ],
+        key=f"comments_sentiment_filter{key_suffix}",
     )
 
     search = st.text_input(
-        "🔎 Search comments"
+        "Search comments",
+        key=f"comments_search{key_suffix}",
     )
 
     min_likes = st.slider(
@@ -1642,6 +1995,7 @@ def show_comments(result):
             )
         ),
         value=0,
+        key=f"comments_min_likes{key_suffix}",
     )
 
     filtered = data[
@@ -1713,7 +2067,7 @@ def show_comments(result):
     ).encode("utf-8")
 
     st.download_button(
-        "⬇️ Download Filtered Comments",
+        "Download Filtered Comments",
         data=csv,
         file_name="youtube_pulse_comments.csv",
         mime="text/csv",
@@ -2272,7 +2626,7 @@ def show_demo_dashboard():
             st.markdown(
                 f"""
                 <div class="insight-card">
-                    📌 {insight}
+                    <span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span>{insight}
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -2952,17 +3306,34 @@ if st.button("✨ Analyze Now",type="primary",width="stretch",key="one_page_anal
         st.warning("Please enter a YouTube URL.")
     else:
         try:
-            with st.status("🔄 Processing YouTube content...",expanded=True) as status:
-                content_type,info,comments,videos=analyze_youtube_url(url,comment_limit,st)
-                st.write(f"📝 Processing {len(comments):,} comments...")
-                transformer=get_transformer()
-                st.write("🧠 Running VADER and Transformer sentiment models...")
-                result=run_complete_analysis(comments,transformer_classifier=transformer,use_transformer=True)
-                st.session_state.analysis_result=result
-                st.session_state.content_info=info
-                st.session_state.content_type=content_type
-                st.session_state.channel_videos=videos
-                status.update(label="✅ Analysis complete",state="complete",expanded=False)
+            with st.status("🔄 Analyzing YouTube content...", expanded=False) as status:
+                content_type, info, comments, videos = analyze_youtube_url(
+                    url, comment_limit, status
+                )
+
+                status.update(
+                    label=f"🧠 Analyzing {len(comments):,} comments with VADER + Transformer...",
+                    state="running",
+                    expanded=False,
+                )
+
+                transformer = get_transformer()
+                result = run_complete_analysis(
+                    comments,
+                    transformer_classifier=transformer,
+                    use_transformer=True,
+                )
+
+                st.session_state.analysis_result = result
+                st.session_state.content_info = info
+                st.session_state.content_type = content_type
+                st.session_state.channel_videos = videos
+
+                status.update(
+                    label=f"✨ Analysis complete · {len(comments):,} comments analyzed",
+                    state="complete",
+                    expanded=False,
+                )
         except Exception as e:
             st.error(f"Analysis failed: {str(e)}")
 
@@ -3103,7 +3474,7 @@ show_demo_dashboard()
 
 st.markdown('<div id="comment-analyzer" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-st.markdown('<div class="section-kicker">Single comment AI</div>', unsafe_allow_html=True)
+
 st.markdown('<div class="section-title">Comment Analyzer</div>', unsafe_allow_html=True)
 st.write("Analyze the sentiment behind an individual YouTube comment.")
 
@@ -3112,14 +3483,28 @@ if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze
     if not comment.strip():
         st.warning("Enter a comment first.")
     else:
-        result=get_vader_sentiment(comment)
-        sentiment=result["sentiment"]
+        # Use the validated transformer model for the primary prediction.
+        transformer = get_transformer()
+        transformer_result = transformer(comment, truncation=True, max_length=512)[0]
+
+        transformer_label = str(transformer_result.get("label", "neutral")).lower()
+        transformer_score = float(transformer_result.get("score", 0.0))
+        sentiment = transformer_label
+
         st.subheader(f"Detected sentiment: {sentiment.title()}")
-        c1,c2,c3,c4=st.columns(4)
-        with c1: metric_card("Positive",f"{result['positive_score']:.2%}")
-        with c2: metric_card("Neutral",f"{result['neutral_score']:.2%}")
-        with c3: metric_card("Negative",f"{result['negative_score']:.2%}")
-        with c4: metric_card("Compound",f"{result['compound_score']:.3f}")
+        st.caption(f"Transformer prediction · confidence {transformer_score:.1%}")
+
+        if sentiment == "positive":
+            context = "The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
+        elif sentiment == "negative":
+            context = "The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
+        else:
+            context = "The language is relatively neutral, with limited positive or negative emotional intensity."
+
+        st.markdown(
+            f'<div class="insight-card"><span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span><strong>Context</strong><br>{context}</div>',
+            unsafe_allow_html=True,
+        )
 
         if sentiment=="positive":
             context="The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
@@ -3127,7 +3512,7 @@ if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze
             context="The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
         else:
             context="The language is relatively neutral, with limited positive or negative emotional intensity."
-        st.markdown(f'<div class="insight-card"><strong>💡 Context</strong><br>{context}</div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="insight-card"><span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span><strong>Context</strong><br>{context}</div>',unsafe_allow_html=True)
 
 st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
