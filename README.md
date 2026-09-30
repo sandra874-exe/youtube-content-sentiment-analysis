@@ -2,63 +2,87 @@
 
 ## Overview
 
-This project analyzes audience sentiment in YouTube comments across three different content domains:
+A data science project analyzing sentiment and engagement in YouTube comments across three content domains:
 
-- Travel
-- Technology
-- Cats
+- **Technology** — Mrwhosetheboss
+- **Travel** — Ryan Trahan
+- **Cats** — Abram Engle
 
-The objective is to explore how audience reactions, sentiment patterns, topics, and engagement differ across these domains.
+The project uses **750 comments from 15 videos** and combines data preprocessing, exploratory analysis, VADER sentiment analysis, transformer-based sentiment analysis, model validation, and an interactive Streamlit dashboard.
 
-## Initial Pilot Dataset
+## Dataset
 
-To validate the complete pipeline, the first version of the project will use:
+| Domain | Videos | Comments |
+|---|---:|---:|
+| Technology | 5 | 250 |
+| Travel | 5 | 250 |
+| Cats | 5 | 250 |
+| **Total** | **15** | **750** |
 
-- 3 YouTube creators
-- 1 creator from each domain
-- 5 videos per creator
-- 50 comments per video
-- 750 comments in total
+## Workflow
 
-The dataset will be expanded after the initial pipeline is working correctly.
+```text
+YouTube Data API
+       ↓
+Data Collection
+       ↓
+Data Cleaning
+       ↓
+EDA
+       ↓
+Sentiment Analysis
+       ↓
+Human Validation
+       ↓
+Model Comparison
+       ↓
+Error Analysis
+       ↓
+Streamlit Dashboard
+```
 
-## Project Workflow
+## Sentiment Analysis
 
-1. YouTube data collection
-2. Data cleaning and preprocessing
-3. Exploratory data analysis
-4. Sentiment analysis
-5. Topic and keyword analysis
-6. Engagement analysis
-7. Cross-domain comparison
-8. Interactive dashboard
+Two approaches were evaluated:
 
-## Planned Sentiment Analysis
+- **VADER**
+- **Twitter-RoBERTa** (`cardiffnlp/twitter-roberta-base-sentiment-latest`)
 
-The project will initially investigate:
+A manually labeled sample of **120 comments** was used for validation.
 
-- VADER sentiment analysis
-- Transformer-based sentiment analysis
-- Comparison between sentiment approaches
+| Model | Accuracy | Macro F1 |
+|---|---:|---:|
+| VADER | 60.83% | 55.38% |
+| Transformer | 71.67% | 69.07% |
 
 ## Project Structure
 
 ```text
 youtube-content-sentiment-analysis/
-│
-├── data/
-│   ├── raw/
-│   └── processed/
-│
-├── notebooks/
-│
-├── src/
-│
+├── app.py
 ├── config/
-│
-├── dashboard/
-│
+├── data/
+├── notebooks/
+├── src/
+├── streamlit/
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
 └── README.md
+```
+
+## Technologies
+
+Python · Pandas · NumPy · Scikit-learn · VADER · Hugging Face Transformers · Matplotlib · Plotly · Streamlit · YouTube Data API
+
+## Run the Dashboard
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Author
+
+**Sandra Wilson**  
+BSc Data Science
