@@ -81,8 +81,3 @@ Python · Pandas · NumPy · Scikit-learn · VADER · Hugging Face Transformers 
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## Author
-
-**Sandra Wilson**  
-BSc Data Science
