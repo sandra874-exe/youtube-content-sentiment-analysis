@@ -24,13 +24,6 @@ from src.sentiment_analyzer import (
 
 from src.creator_comparison import compare_creators
 
-from src.sarcasm_analyzer import (
-    load_sarcasm_detector,
-    detect_sarcasm,
-    sarcastic_comment_examples,
-)
-
-
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -592,12 +585,6 @@ def load_csv(filename):
 def get_transformer():
 
     return load_transformer()
-
-
-@st.cache_resource
-def get_sarcasm_detector():
-
-    return load_sarcasm_detector()
 
 
 # ============================================================
@@ -2003,99 +1990,6 @@ def show_channel_breakdown(
 # COMPLETE RESULTS
 # ============================================================
 
-def show_sarcasm(result):
-
-    section_title("🎭 Sarcasm Analysis")
-
-    summary = result.get("sarcasm_summary", {})
-    comments = result.get("comments", pd.DataFrame()).copy()
-
-    if not summary.get("available", False):
-        st.warning(
-            "Sarcasm detection is unavailable for this analysis. "
-            "The rest of the analysis is still available."
-        )
-        return
-
-    total = int(summary.get("total_comments", 0))
-    sarcastic = int(summary.get("sarcastic_comments", 0))
-    percentage = float(summary.get("sarcasm_percentage", 0.0))
-    confidence = float(summary.get("average_sarcasm_confidence", 0.0))
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        metric_card("🎭 Potentially Sarcastic", f"{percentage:.1f}%")
-    with c2:
-        metric_card("🎭 Sarcastic Comments", f"{sarcastic:,}")
-    with c3:
-        metric_card("💬 Comments Checked", f"{total:,}")
-    with c4:
-        metric_card("🎯 Avg. Detector Confidence", f"{confidence:.1f}%")
-
-    st.info(
-        "Sarcasm detection is probabilistic. A detected comment should be treated "
-        "as potentially sarcastic, especially because the model was trained on "
-        "social/news text rather than YouTube-specific conversations."
-    )
-
-    by_sentiment = result.get("sarcasm_by_sentiment", pd.DataFrame())
-    left, right = st.columns(2)
-
-    with left:
-        if not by_sentiment.empty:
-            fig = px.bar(
-                by_sentiment,
-                x="vader_sentiment",
-                y="sarcasm_percentage",
-                text="sarcasm_percentage",
-                title="Potential Sarcasm by VADER Sentiment",
-            )
-            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-            fig.update_layout(
-                yaxis_title="Potentially Sarcastic (%)",
-                xaxis_title="VADER Sentiment",
-                height=400,
-            )
-            st.plotly_chart(fig, width="stretch")
-
-    with right:
-        if not by_sentiment.empty:
-            fig = px.bar(
-                by_sentiment,
-                x="vader_sentiment",
-                y="sarcastic_comments",
-                text="sarcastic_comments",
-                title="Sarcastic Comment Count by Sentiment",
-            )
-            fig.update_layout(
-                yaxis_title="Sarcastic Comments",
-                xaxis_title="VADER Sentiment",
-                height=400,
-            )
-            st.plotly_chart(fig, width="stretch")
-
-    if "sarcasm_label" in comments.columns:
-        examples = sarcastic_comment_examples(comments, n=15)
-        st.subheader("Highest-Confidence Potentially Sarcastic Comments")
-        if examples.empty:
-            st.info("No potentially sarcastic comments were detected.")
-        else:
-            display_cols = [
-                col for col in [
-                    "comment_text",
-                    "vader_sentiment",
-                    "transformer_sentiment",
-                    "sarcasm_score",
-                    "like_count",
-                ] if col in examples.columns
-            ]
-            table = examples[display_cols].copy()
-            if "sarcasm_score" in table.columns:
-                table["sarcasm_score"] = (table["sarcasm_score"] * 100).round(1)
-                table = table.rename(columns={"sarcasm_score": "sarcasm_confidence_%"})
-            st.dataframe(table, width="stretch", hide_index=True, height=500)
-
-
 def show_analysis_results():
 
     result = (
@@ -3211,7 +3105,7 @@ st.markdown('<div id="comment-analyzer" class="anchor-section"></div>', unsafe_a
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-kicker">Single comment AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="section-title">Comment Analyzer</div>', unsafe_allow_html=True)
-st.write("See the sentiment behind a comment and explore whether its tone may be sarcastic.")
+st.write("Analyze the sentiment behind an individual YouTube comment.")
 
 comment=st.text_area("Enter a YouTube comment",height=150,placeholder="Example: This video was absolutely amazing!",key="one_page_comment")
 if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze"):
@@ -3253,7 +3147,6 @@ with c1:
     - Engagement analysis
     - Comment exploration
     - Automatic insights
-    - Single-comment sarcasm detection
     - Video-level channel comparison
     """)
 with c2:
