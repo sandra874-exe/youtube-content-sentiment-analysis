@@ -25,11 +25,6 @@ from src.sentiment_analyzer import (
 
 from src.creator_comparison import compare_creators
 
-from src.sarcasm_analyzer import (
-    load_sarcasm_detector,
-    detect_sarcasm,
-    sarcastic_comment_examples,
-)
 
 
 # ============================================================
@@ -38,7 +33,7 @@ from src.sarcasm_analyzer import (
 
 st.set_page_config(
     page_title="YouTube Pulse",
-    page_icon="🎬",
+    page_icon="YT",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -502,9 +497,6 @@ METRIC_ICON_MAP = {
     "avg. negative %": "negative",
     "sources compared": "users",
     "compound": "chart",
-    "potentially sarcastic": "sparkles",
-    "sarcastic comments": "sparkles",
-    "avg. detector confidence": "shield",
 }
 
 
@@ -516,7 +508,6 @@ SECTION_ICON_MAP = {
     "comment explorer": "comment",
     "vader vs transformer": "brain",
     "channel video breakdown": "video",
-    "sarcasm analysis": "sparkles",
     "dataset insights": "lightbulb",
     "overall dataset sentiment": "chart",
     "video-level sentiment": "video",
@@ -752,10 +743,6 @@ def get_transformer():
     return load_transformer()
 
 
-@st.cache_resource
-def get_sarcasm_detector():
-
-    return load_sarcasm_detector()
 
 
 # ============================================================
@@ -2357,99 +2344,6 @@ def show_channel_breakdown(
 # COMPLETE RESULTS
 # ============================================================
 
-def show_sarcasm(result):
-
-    section_title("🎭 Sarcasm Analysis")
-
-    summary = result.get("sarcasm_summary", {})
-    comments = result.get("comments", pd.DataFrame()).copy()
-
-    if not summary.get("available", False):
-        st.warning(
-            "Sarcasm detection is unavailable for this analysis. "
-            "The rest of the analysis is still available."
-        )
-        return
-
-    total = int(summary.get("total_comments", 0))
-    sarcastic = int(summary.get("sarcastic_comments", 0))
-    percentage = float(summary.get("sarcasm_percentage", 0.0))
-    confidence = float(summary.get("average_sarcasm_confidence", 0.0))
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        metric_card("🎭 Potentially Sarcastic", f"{percentage:.1f}%")
-    with c2:
-        metric_card("🎭 Sarcastic Comments", f"{sarcastic:,}")
-    with c3:
-        metric_card("💬 Comments Checked", f"{total:,}")
-    with c4:
-        metric_card("🎯 Avg. Detector Confidence", f"{confidence:.1f}%")
-
-    st.info(
-        "Sarcasm detection is probabilistic. A detected comment should be treated "
-        "as potentially sarcastic, especially because the model was trained on "
-        "social/news text rather than YouTube-specific conversations."
-    )
-
-    by_sentiment = result.get("sarcasm_by_sentiment", pd.DataFrame())
-    left, right = st.columns(2)
-
-    with left:
-        if not by_sentiment.empty:
-            fig = px.bar(
-                by_sentiment,
-                x="vader_sentiment",
-                y="sarcasm_percentage",
-                text="sarcasm_percentage",
-                title="Potential Sarcasm by VADER Sentiment",
-            )
-            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-            fig.update_layout(
-                yaxis_title="Potentially Sarcastic (%)",
-                xaxis_title="VADER Sentiment",
-                height=400,
-            )
-            st.plotly_chart(fig, width="stretch")
-
-    with right:
-        if not by_sentiment.empty:
-            fig = px.bar(
-                by_sentiment,
-                x="vader_sentiment",
-                y="sarcastic_comments",
-                text="sarcastic_comments",
-                title="Sarcastic Comment Count by Sentiment",
-            )
-            fig.update_layout(
-                yaxis_title="Sarcastic Comments",
-                xaxis_title="VADER Sentiment",
-                height=400,
-            )
-            st.plotly_chart(fig, width="stretch")
-
-    if "sarcasm_label" in comments.columns:
-        examples = sarcastic_comment_examples(comments, n=15)
-        st.subheader("Highest-Confidence Potentially Sarcastic Comments")
-        if examples.empty:
-            st.info("No potentially sarcastic comments were detected.")
-        else:
-            display_cols = [
-                col for col in [
-                    "comment_text",
-                    "vader_sentiment",
-                    "transformer_sentiment",
-                    "sarcasm_score",
-                    "like_count",
-                ] if col in examples.columns
-            ]
-            table = examples[display_cols].copy()
-            if "sarcasm_score" in table.columns:
-                table["sarcasm_score"] = (table["sarcasm_score"] * 100).round(1)
-                table = table.rename(columns={"sarcasm_score": "sarcasm_confidence_%"})
-            st.dataframe(table, width="stretch", hide_index=True, height=500)
-
-
 def show_analysis_results():
 
     result = (
@@ -3580,32 +3474,39 @@ show_demo_dashboard()
 
 st.markdown('<div id="comment-analyzer" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-st.markdown('<div class="section-kicker">Single comment AI</div>', unsafe_allow_html=True)
+
 st.markdown('<div class="section-title">Comment Analyzer</div>', unsafe_allow_html=True)
-st.write("See the sentiment behind a comment and explore whether its tone may be sarcastic.")
+st.write("Analyze the sentiment behind an individual YouTube comment.")
 
 comment=st.text_area("Enter a YouTube comment",height=150,placeholder="Example: This video was absolutely amazing!",key="one_page_comment")
 if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze"):
     if not comment.strip():
         st.warning("Enter a comment first.")
     else:
-        result=get_vader_sentiment(comment)
-        sentiment=result["sentiment"]
+        # Use the validated transformer model for the primary prediction.
+        transformer = get_transformer()
+        transformer_result = transformer(comment, truncation=True, max_length=512)[0]
+
+        transformer_label = str(transformer_result.get("label", "neutral")).lower()
+        transformer_score = float(transformer_result.get("score", 0.0))
+        sentiment = transformer_label
+
         st.subheader(f"Detected sentiment: {sentiment.title()}")
-        c1,c2,c3,c4=st.columns(4)
-        with c1: metric_card("Positive",f"{result['positive_score']:.2%}")
-        with c2: metric_card("Neutral",f"{result['neutral_score']:.2%}")
-        with c3: metric_card("Negative",f"{result['negative_score']:.2%}")
-        with c4: metric_card("Compound",f"{result['compound_score']:.3f}")
+        st.caption(f"Transformer prediction · confidence {transformer_score:.1%}")
 
-        if sentiment=="positive":
-            context="The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
-        elif sentiment=="negative":
-            context="The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
+        if sentiment == "positive":
+            context = "The language carries a positive emotional signal, suggesting approval, enjoyment or appreciation."
+        elif sentiment == "negative":
+            context = "The language carries a negative emotional signal, suggesting criticism, frustration or dissatisfaction."
         else:
-            context="The language is relatively neutral, with limited positive or negative emotional intensity."
-        st.markdown(f'<div class="insight-card"><span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span><strong>Context</strong><br>{context}</div>',unsafe_allow_html=True)
+            context = "The language is relatively neutral, with limited positive or negative emotional intensity."
 
+        st.markdown(
+            f'<div class="insight-card"><span class="insight-icon">{svg_icon("lightbulb", size=18, color="#D95F43")}</span><strong>Context</strong><br>{context}</div>',
+            unsafe_allow_html=True,
+        )
+
+st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div id="about" class="anchor-section"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 st.markdown('<div class="section-kicker">About the project</div>', unsafe_allow_html=True)
@@ -3624,7 +3525,6 @@ with c1:
     - Engagement analysis
     - Comment exploration
     - Automatic insights
-    - Single-comment sarcasm detection
     - Video-level channel comparison
     """)
 with c2:
