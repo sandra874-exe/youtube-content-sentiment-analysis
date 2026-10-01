@@ -1047,7 +1047,7 @@ def show_comparison_results(results, comparison_type):
     if not results:
         return
 
-    section_title("⚖️ Comparison Overview")
+    section_title(" Comparison Overview")
     st.write(
         "Each source is analysed independently, then compared side-by-side. "
         "Sentiment percentages are calculated from the comments collected for that source."
@@ -1243,7 +1243,6 @@ def show_creator_comparison(result):
                 "neutral_pct",
                 "negative_pct",
                 "average_comment_likes",
-                "median_comment_likes",
                 "model_agreement_pct",
             ]
         ].rename(
@@ -1255,7 +1254,6 @@ def show_creator_comparison(result):
                 "neutral_pct": "Neutral %",
                 "negative_pct": "Negative %",
                 "average_comment_likes": "Avg. Comment Likes",
-                "median_comment_likes": "Median Comment Likes",
                 "model_agreement_pct": "Model Agreement %",
             }
         ),
@@ -1273,7 +1271,6 @@ def show_creator_comparison(result):
             "Engagement metric",
             [
                 "average_comment_likes",
-                "median_comment_likes",
                 "average_video_views",
                 "average_video_likes",
             ],
@@ -2372,11 +2369,11 @@ def show_analysis_results():
 
     tabs = st.tabs(
         [
-            "📊 Overview",
-            "🔑 Topics",
-            "❤️ Engagement",
-            "💬 Comments",
-            "🧠 Models",
+            "Overview",
+            "Topics",
+            "Engagement",
+            "Comments",
+            "Models",
         ]
     )
 
@@ -2562,14 +2559,14 @@ def show_demo_dashboard():
 
     tabs = st.tabs(
         [
-            "📊 Overview",
-            "🌐 Domains",
-            "👤 Creators",
-            "🎥 Videos",
-            "🔑 Keywords",
-            "💬 Comments",
-            "🧠 Model Validation",
-            "⚠️ Error Analysis",
+            "Overview",
+            "Domains",
+            "Creators",
+            "Videos",
+            "Keywords",
+            "Comments",
+            "Model Validation",
+            "Error Analysis",
         ]
     )
 
@@ -3301,7 +3298,7 @@ st.write("Paste a YouTube URL and discover audience sentiment, engagement, topic
 url=st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=... or https://www.youtube.com/@channel", key="one_page_url")
 comment_limit=st.slider("Comments to analyze",100,5000,1000,100,help="Maximum number of comments collected for this analysis.",key="one_page_limit")
 
-if st.button("✨ Analyze Now",type="primary",width="stretch",key="one_page_analyze"):
+if st.button("Analyze Now",type="primary",width="stretch",key="one_page_analyze"):
     if not url.strip():
         st.warning("Please enter a YouTube URL.")
     else:
@@ -3407,7 +3404,7 @@ with cmp2:
     )
 
 if st.button(
-    "⚖️ Compare Creators",
+    "Compare Creators",
     type="primary",
     width="stretch",
     key="compare_creators_button",
@@ -3479,7 +3476,7 @@ st.markdown('<div class="section-title">Comment Analyzer</div>', unsafe_allow_ht
 st.write("Analyze the sentiment behind an individual YouTube comment.")
 
 comment=st.text_area("Enter a YouTube comment",height=150,placeholder="Example: This video was absolutely amazing!",key="one_page_comment")
-if st.button("🔍 Analyze Comment",type="primary",key="one_page_comment_analyze"):
+if st.button("Analyze Comment",type="primary",key="one_page_comment_analyze"):
     if not comment.strip():
         st.warning("Enter a comment first.")
     else:
@@ -3514,7 +3511,7 @@ st.markdown('<div class="section-title">YouTube Pulse</div>', unsafe_allow_html=
 st.write("An interactive YouTube audience sentiment intelligence platform for exploring sentiment, engagement, language, topics and model behaviour.")
 c1,c2=st.columns(2)
 with c1:
-    st.subheader("🎯 Analysis Features")
+    st.subheader("Analysis Features")
     st.markdown("""
     - Video sentiment analysis
     - Channel sentiment analysis
@@ -3528,7 +3525,7 @@ with c1:
     - Video-level channel comparison
     """)
 with c2:
-    st.subheader("🧠 NLP Models")
+    st.subheader("NLP Models")
     st.markdown("""
     **VADER**
 
